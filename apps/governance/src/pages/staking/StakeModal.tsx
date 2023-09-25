@@ -14,6 +14,7 @@ import {
   getTimestampAfterMonths,
   monthsToTimestamp,
 } from '../../utils/date';
+import { toSignificantDigits } from '../../utils/number';
 import { estimateAPY, votingPowerMultiplier } from '../../utils/stakeMath';
 import { MyLockupsTable } from './MyLockups';
 
@@ -228,9 +229,9 @@ export const ExtendStakeModal = () => {
           min={monthsToTimestamp(lockup?.endsAt || Date.now())}
         />
 
-        <VotingPower
-          amount={lockup?.tokens || 0}
+        <AmountReceived
           monthsToStake={monthsToStake}
+          amount={lockup?.tokens || 0}
         />
 
         {!state.rewardsToCollect ? null : (
@@ -239,7 +240,7 @@ export const ExtendStakeModal = () => {
             <div className="text-xs text-gray-500">
               {`You have accrued ${state.rewardsToCollect.toFixed(
                 2,
-              )} OVG in staking rewards. This OGV will be transferred to your wallet immediately when you extend your stake.`}
+              )} OGV in staking rewards. This OGV will be transferred to your wallet immediately when you extend your stake.`}
             </div>
           </div>
         )}
@@ -310,30 +311,36 @@ interface AmountReceivedProps {
 }
 
 const AmountReceived = (props: AmountReceivedProps) => {
+  const { state } = useContext(StateContext);
   const { monthsToStake, amount } = props;
+  const myVotingPower = votingPowerMultiplier(monthsToStake) * amount;
+  const votingPowerPct = (myVotingPower / state.totalVotes) * 100;
   return (
     <>
       <div className="font-bold mb-3 flex items-center gap-1">
         Amount received today
         <Tooltip
-          title="The amount of veOGV you will receive today in return for your staked OGV. Your voting power (%) represents your share of the total amount of veOGV issued to date."
+          title="The amount of veOGV you will receive today in return for your staked OGV."
           placement="right"
         />
       </div>
       <div className="bg-[rgba(81,84,102,0.20)] border border-[rgba(81,84,102,0.50)] rounded leading-snug mb-6 flex justify-stretch">
         <div className="px-6 pt-3 pb-2 flex-1">
           <div className="text-2xl font-medium">
-            {(votingPowerMultiplier(monthsToStake) * amount).toLocaleString(
-              undefined,
-              {
-                maximumFractionDigits: 2,
-                minimumFractionDigits: 0,
-              },
-            )}
+            {myVotingPower.toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+              minimumFractionDigits: 0,
+            })}
           </div>
-          <div className="mt-2 mb-2 text-xs">
-            <span className="mr-2">Voting power:</span>
-            <span className="font-bold">1.764%</span>
+          <div className="mt-2 mb-2 text-xs flex items-center">
+            Voting power:
+            <span className="mx-2 font-bold">
+              {`${toSignificantDigits(votingPowerPct, 4)}% `}
+            </span>
+            <Tooltip
+              title="Your share of the total amount of veOGV issued to date."
+              placement="right"
+            />
           </div>
         </div>
         <div className="border-l border-[rgba(81,84,102,0.50)] flex items-center justify-center px-6 text-gray-500 font-medium gap-2 text-xl">
@@ -365,33 +372,6 @@ const RewardsAPY = (props: RewardsAPYProps) => {
         </div>
       </div>
     </>
-  );
-};
-
-interface VotingPowerProps {
-  monthsToStake: number;
-  amount: number;
-}
-
-const VotingPower = (props: VotingPowerProps) => {
-  const { monthsToStake, amount } = props;
-  return (
-    <div className="bg-[rgba(81,84,102,0.20)] rounded px-6 py-4 leading-snug mb-6 flex items-center justify-between">
-      Voting power
-      <div className="flex items-center gap-1">
-        <img src={veOGVIcon} alt="veOGV" />
-        <div className="text-gray-500 ml-2">
-          {(votingPowerMultiplier(monthsToStake) * amount).toLocaleString(
-            undefined,
-            {
-              maximumFractionDigits: 2,
-              minimumFractionDigits: 0,
-            },
-          )}
-        </div>
-        <div>veOGV</div>
-      </div>
-    </div>
   );
 };
 

@@ -47,6 +47,7 @@ export interface IAppState {
   rewardsToCollect: number;
   devControls: boolean;
   waitForTx: boolean;
+  totalVotes: number;
 }
 
 export const initialState: IAppState = {
@@ -59,6 +60,7 @@ export const initialState: IAppState = {
   rewardsToCollect: 0,
   devControls: false,
   waitForTx: false,
+  totalVotes: 8250187319,
 };
 
 interface StateContextProps {

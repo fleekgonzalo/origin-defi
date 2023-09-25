@@ -1,6 +1,8 @@
 import { useContext, useState } from 'react';
 
 import { AnimatedModal, ModalHeader } from '../components/AnimatedModal';
+import { getTimestampAfterMonths } from '../utils/date';
+import { votingPowerMultiplier } from '../utils/stakeMath';
 import { StateContext } from './AppState';
 
 export const DevControls = () => {
@@ -36,6 +38,26 @@ export const DevControls = () => {
             }}
           >
             +1,000,000 OGV
+          </button>
+          <button
+            className="btn-outline py-2 text-sm"
+            onClick={() => {
+              const tokens = 1000000;
+              setState({
+                lockups: [
+                  ...state.lockups,
+                  {
+                    id: Date.now(),
+                    tokens,
+                    endsAt: getTimestampAfterMonths(48),
+                    votingPower: votingPowerMultiplier(48) * Number(tokens),
+                  },
+                ],
+              });
+              setShouldClose(true);
+            }}
+          >
+            Add lockups
           </button>
           <button
             className="btn-outline py-2 text-sm"

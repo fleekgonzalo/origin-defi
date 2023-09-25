@@ -5,7 +5,8 @@ import { useSignMessage } from 'wagmi';
 import OGVIcon from '../../assets/ogv.svg';
 import veOGVIcon from '../../assets/ve-ogv.svg';
 import { StateContext } from '../../components/AppState';
-import { CaretDown, ExternalLink, Spinner } from '../../components/Icons';
+import { ExternalLink, Spinner } from '../../components/Icons';
+import { Tooltip } from '../../components/Tooltip';
 import {
   estimateTimeToFutureTimestamp,
   formatDateFromTimestamp,
@@ -30,19 +31,19 @@ export const MyLockups = (props: MyLockupsProps) => {
   );
 };
 
+const gridCols = `grid grid-cols-[auto,auto] sm:grid-cols-[auto,auto,auto]`;
+const gridColsActions = `grid grid-cols-[auto,auto,max-content] sm:grid-cols-[auto,auto,auto,max-content] border-b border-off-black`;
+
 export const MyLockupsTable = (props: MyLockupsProps) => {
   return (
-    <div
-      className={`grid grid-cols-[auto,auto,max-content] sm:grid-cols-[auto,auto,auto,max-content]${
-        props.disableActions ? '' : ' border-b border-off-black'
-      }`}
-    >
+    <div className={props.disableActions ? gridCols : gridColsActions}>
       <div className="text-gray-500 pl-6 py-4">OGV</div>
-      <div className="text-gray-500 py-4 text-center">Time remaining</div>
+      {/* <div className="text-gray-500 py-4 text-center">Time remaining</div> */}
       <div className="text-gray-500 py-4 text-center hidden sm:block">
         Lockup ends
       </div>
       <div className="text-gray-500 px-6 py-4 text-center">Voting power</div>
+      {props.disableActions ? null : <div />}
       {props.lockups.map((lockup, idx) => (
         <LockupRow
           key={idx}
@@ -62,61 +63,51 @@ const LockupRow = (props: {
 }) => {
   const { setState } = useContext(StateContext);
   const { lockup } = props;
-  const [open, setOpen] = useState(false);
-  const rowClassBase = `items-center border-t border-off-black py-4 transition duration-150 ease-in-out`;
-  const rowClass = open
-    ? `${rowClassBase} bg-white/3`
-    : `${rowClassBase}${props.disableActions ? '' : ' group-hover:bg-white/3'}`;
+  const rowClass = `items-center border-t border-off-black py-4 transition duration-150 ease-in-out`;
 
   return (
-    <div
-      className={`contents${
-        props.disableActions ? '' : ' cursor-pointer group'
-      }`}
-      onClick={() => setOpen(!open)}
-    >
+    <>
       <div className={`${rowClass} flex pl-6 gap-2`}>
         <img src={OGVIcon} alt="veOGV" />
         {lockup.tokens.toLocaleString()}
       </div>
-      <div className={`${rowClass} flex justify-center`}>
+      {/* <div className={`${rowClass} flex justify-center`}>
         {estimateTimeToFutureTimestamp(lockup.endsAt)}
-      </div>
+      </div> */}
       <div className={`${rowClass} justify-center hidden sm:flex`}>
-        {formatDateFromTimestamp(lockup.endsAt)}
+        <Tooltip
+          title={estimateTimeToFutureTimestamp(lockup.endsAt)}
+          placement="right"
+        >
+          {formatDateFromTimestamp(lockup.endsAt)}
+        </Tooltip>
       </div>
       <div className={`${rowClass} flex gap-2 justify-center px-6`}>
         <img src={veOGVIcon} alt="veOGV" />
         {lockup.votingPower.toLocaleString(undefined, {
           maximumFractionDigits: 0,
         })}
-        {props.disableActions ? null : (
-          <button className="text-blue-500">
-            <CaretDown className={open ? 'rotate-180' : ''} />
-          </button>
-        )}
       </div>
-      {!open || props.disableActions ? null : (
-        <div className="col-span-3 sm:col-span-4 px-6 pb-4 flex justify-end items-start gap-2 bg-white/3">
-          <div className="overflow-hidden flex gap-2 items-start">
-            <button
-              className="btn-outline text-xs px-4 py-2"
-              onClick={(e) => {
-                e.stopPropagation();
-                setState({ extendStakeModal: lockup.id });
-              }}
-            >
-              Extend
-            </button>
-            <UnstakeButton lockup={lockup} />
 
-            <button className="text-blue-500 ml-6">
-              <ExternalLink size={18} />
-            </button>
-          </div>
+      {props.disableActions ? null : (
+        <div className={`${rowClass} flex gap-2 justify-center pr-6`}>
+          <button
+            className="btn-outline text-xs px-4 py-1.5"
+            onClick={(e) => {
+              e.stopPropagation();
+              setState({ extendStakeModal: lockup.id });
+            }}
+          >
+            Extend
+          </button>
+          <UnstakeButton lockup={lockup} />
+
+          <button className="text-blue-500">
+            <ExternalLink size={18} />
+          </button>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
@@ -165,7 +156,7 @@ const UnstakeButton = ({ lockup }: { lockup: Lockup }) => {
   if (mode === 'pending' || mode === 'confirm') {
     return (
       <button
-        className="btn-outline-disabled text-xs pl-3 pr-4 py-2 flex items-center gap-2"
+        className="btn-outline-disabled text-xs pl-3 pr-4 py-1.5 flex items-center gap-2"
         onClick={(e) => e.stopPropagation()}
       >
         <Spinner size={14} />
@@ -176,7 +167,7 @@ const UnstakeButton = ({ lockup }: { lockup: Lockup }) => {
 
   return (
     <button
-      className={`${btnClass} text-xs px-4 py-2 flex items-center gap-2`}
+      className={`${btnClass} text-xs px-4 py-1.5 flex items-center gap-2`}
       onClick={(e) => {
         e.stopPropagation();
         unstake();
