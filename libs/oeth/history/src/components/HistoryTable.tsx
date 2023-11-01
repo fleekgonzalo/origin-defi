@@ -1,13 +1,13 @@
 import { useMemo } from 'react';
 
 import {
-  Box,
   Stack,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  Typography,
 } from '@mui/material';
 import { LinkIcon } from '@origin/shared/components';
 import { quantityFormat } from '@origin/shared/utils';
@@ -18,13 +18,17 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useIntl } from 'react-intl';
+import { formatEther } from 'viem';
 
 import { HistoryFilterButton } from './HistoryButton';
-import { HistoryCell } from './HistoryCell';
+import { TransactionIcon } from './TransactionIcon';
 
-import type { HistoryTableQuery } from '../queries.generated';
+import type { StackProps } from '@mui/material';
+import type { HistoryType } from '@origin/oeth/shared';
 
-export type Rows = HistoryTableQuery['addressById']['history'];
+import type { HistoryPageQuery } from '../queries.generated';
+
+export type Rows = HistoryPageQuery['addresses'][0]['history'];
 
 interface Props {
   rows: Rows;
@@ -49,11 +53,9 @@ export function HistoryTable({
     () => [
       columnHelper.accessor('type', {
         cell: (info) => (
-          <HistoryCell
-            // @ts-expect-error type-mismatch
+          <HistoryTypeCell
             type={info.getValue()}
             timestamp={info.row.original.timestamp}
-            transactionHash={info.row.original.txHash}
           />
         ),
         header: intl.formatMessage({ defaultMessage: 'Type' }),
@@ -64,37 +66,43 @@ export function HistoryTable({
         },
       }),
       columnHelper.accessor('value', {
-        cell: (info) => intl.formatNumber(info.getValue(), quantityFormat),
-        header: intl.formatMessage({ defaultMessage: 'Change' }),
+        cell: (info) => (
+          <Typography textAlign="end">
+            {intl.formatNumber(
+              +formatEther(BigInt(info.getValue() ?? '0')),
+              quantityFormat,
+            )}
+          </Typography>
+        ),
+        header: () => (
+          <Typography textAlign="end">
+            {intl.formatMessage({ defaultMessage: 'Change' })}
+          </Typography>
+        ),
       }),
       columnHelper.accessor('balance', {
         cell: (info) => (
-          <Stack
-            direction="row"
-            alignItems="center"
-            justifyContent="space-between"
-            gap={1}
-            sx={{ textAlign: 'right' }}
-          >
-            <Box
-              sx={{
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                maxWidth: '75%',
-              }}
-              component="span"
-            >
-              {intl.formatNumber(info.getValue(), quantityFormat)}
-            </Box>
-
-            <LinkIcon
-              url={`https://etherscan.io/tx/${info.row.original.txHash}`}
-              sx={{ transform: 'translateY(6.5%)' }}
-            />
-          </Stack>
+          <Typography textAlign="end">
+            {intl.formatNumber(
+              +formatEther(BigInt(info.getValue() ?? '0')),
+              quantityFormat,
+            )}
+          </Typography>
         ),
-        header: intl.formatMessage({ defaultMessage: 'Balance' }),
+        header: () => (
+          <Typography textAlign="end">
+            {intl.formatMessage({ defaultMessage: 'Balance' })}
+          </Typography>
+        ),
+      }),
+      columnHelper.display({
+        id: 'link',
+        cell: (info) => (
+          <LinkIcon
+            size={10}
+            url={`https://etherscan.io/tx/${info.row.original.txHash}`}
+          />
+        ),
       }),
     ],
     [intl],
@@ -118,10 +126,8 @@ export function HistoryTable({
   });
 
   return (
-    <Stack gap={2}>
-      <Table
-        sx={{ '& .MuiTableCell-root': { paddingInline: { xs: 2, md: 3 } } }}
-      >
+    <Stack>
+      <Table sx={{ '& .MuiTableCell-root': { px: { xs: 2, md: 3 } } }}>
         <TableHead>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow
@@ -135,7 +141,7 @@ export function HistoryTable({
               {headerGroup.headers.map((header, index) => (
                 <TableCell
                   key={header.id}
-                  sx={{ paddingBlock: 3 }}
+                  sx={{ py: 3 }}
                   align={index > 0 ? 'center' : 'left'}
                 >
                   {flexRender(
@@ -155,18 +161,14 @@ export function HistoryTable({
                 '& > *:first-of-type': {
                   width: '50%',
                 },
+                '& > *:last-of-type': {
+                  pl: 0,
+                  textAlign: 'end',
+                },
               }}
             >
               {row.getVisibleCells().map((cell) => (
-                <TableCell
-                  key={cell.id}
-                  align="left"
-                  sx={{
-                    ...(cell.column.columnDef.id === 'type'
-                      ? { '&:first-letter': { textTransform: 'uppercase' } }
-                      : {}),
-                  }}
-                >
+                <TableCell key={cell.id}>
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </TableCell>
               ))}
@@ -176,9 +178,10 @@ export function HistoryTable({
       </Table>
       <Stack
         direction="row"
+        alignItems="baseline"
         justifyContent="flex-end"
         gap={1}
-        sx={{ paddingInline: 2 }}
+        sx={{ px: { xs: 2, md: 3 }, py: 2 }}
       >
         <HistoryFilterButton
           disabled={!hasPreviousPage}
@@ -186,12 +189,39 @@ export function HistoryTable({
         >
           {intl.formatMessage({ defaultMessage: 'Previous' })}
         </HistoryFilterButton>
+        <Typography fontSize={13} px={2}>
+          {intl.formatMessage(
+            { defaultMessage: 'Page {page}' },
+            { page: page + 1 },
+          )}
+        </Typography>
         <HistoryFilterButton
           disabled={!hasNextPage}
           onClick={() => setPage(page + 1)}
         >
           {intl.formatMessage({ defaultMessage: 'Next' })}
         </HistoryFilterButton>
+      </Stack>
+    </Stack>
+  );
+}
+
+type HistoryTypeCellProps = {
+  timestamp: string;
+  type: HistoryType;
+} & StackProps;
+
+function HistoryTypeCell({ timestamp, type, ...rest }: HistoryTypeCellProps) {
+  const intl = useIntl();
+
+  return (
+    <Stack {...rest} direction="row" alignItems="center" gap={1.5}>
+      <TransactionIcon type={type} />
+      <Stack>
+        <Typography fontWeight="500">{type}</Typography>
+        <Typography color="text.secondary" variant="body2">
+          {intl.formatDate(new Date(timestamp))}
+        </Typography>
       </Stack>
     </Stack>
   );

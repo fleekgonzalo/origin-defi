@@ -1,11 +1,17 @@
 import { useCallback } from 'react';
 
-import { contracts } from '@origin/shared/contracts';
+import { trackEvent } from '@origin/oeth/shared';
+import { NotificationSnack, SeverityIcon } from '@origin/shared/components';
+import { contracts, tokens } from '@origin/shared/contracts';
 import {
-  BlockExplorerLink,
+  RedeemNotification,
+  useDeleteActivity,
+  usePushActivity,
   usePushNotification,
+  useSlippage,
+  useUpdateActivity,
 } from '@origin/shared/providers';
-import { isNilOrEmpty } from '@origin/shared/utils';
+import { isNilOrEmpty, isUserRejected } from '@origin/shared/utils';
 import {
   prepareWriteContract,
   waitForTransaction,
@@ -16,7 +22,7 @@ import { useIntl } from 'react-intl';
 import { formatUnits, parseUnits } from 'viem';
 import { useAccount, useQueryClient } from 'wagmi';
 
-import { MIX_TOKEN } from './constants';
+import { GAS_BUFFER, MIX_TOKEN } from './constants';
 import { useRedeemState } from './state';
 
 export const useHandleAmountInChange = () => {
@@ -35,26 +41,15 @@ export const useHandleAmountInChange = () => {
   );
 };
 
-export const useHandleSlippageChange = () => {
-  const [, setRedeemState] = useRedeemState();
-
-  return useCallback(
-    (value: number) => {
-      setRedeemState(
-        produce((state) => {
-          state.slippage = value;
-        }),
-      );
-    },
-    [setRedeemState],
-  );
-};
-
 export const useHandleRedeem = () => {
   const intl = useIntl();
+  const { value: slippage } = useSlippage();
   const pushNotification = usePushNotification();
+  const pushActivity = usePushActivity();
+  const updateActivity = useUpdateActivity();
+  const deleteActivity = useDeleteActivity();
   const { address } = useAccount();
-  const [{ amountIn, amountOut, slippage }, setRedeemState] = useRedeemState();
+  const [{ amountIn, amountOut, gas }, setRedeemState] = useRedeemState();
   const wagmiClient = useQueryClient();
 
   return useCallback(async () => {
@@ -62,65 +57,131 @@ export const useHandleRedeem = () => {
       return;
     }
 
-    setRedeemState(
-      produce((draft) => {
-        draft.isRedeemLoading = true;
-      }),
+    const minAmountOut = parseUnits(
+      (
+        +formatUnits(amountOut, MIX_TOKEN.decimals) -
+        +formatUnits(amountOut, MIX_TOKEN.decimals) * slippage
+      ).toString(),
+      MIX_TOKEN.decimals,
     );
 
-    try {
-      const minAmountOut = parseUnits(
-        (
-          +formatUnits(amountOut, MIX_TOKEN.decimals) -
-          +formatUnits(amountOut, MIX_TOKEN.decimals) * slippage
-        ).toString(),
-        MIX_TOKEN.decimals,
-      );
+    const activity = pushActivity({
+      type: 'redeem',
+      status: 'pending',
+      tokenIn: tokens.mainnet.OETH,
+      tokenOut: MIX_TOKEN,
+      amountIn,
+      amountOut,
+    });
 
+    setRedeemState(
+      produce((draft) => {
+        draft.isRedeemWaitingForSignature = true;
+      }),
+    );
+    trackEvent({
+      name: 'redeem_started',
+      redeem_amount: amountIn,
+    });
+    try {
       const { request } = await prepareWriteContract({
         address: contracts.mainnet.OETHVaultCore.address,
         abi: contracts.mainnet.OETHVaultCore.abi,
         functionName: 'redeem',
         args: [amountIn, minAmountOut],
+        gas: gas + (gas * GAS_BUFFER) / 100n,
       });
       const { hash } = await writeContract(request);
+      setRedeemState(
+        produce((draft) => {
+          draft.isRedeemWaitingForSignature = false;
+          draft.isRedeemLoading = true;
+        }),
+      );
       const txReceipt = await waitForTransaction({ hash });
-
-      console.log('redeem vault done!');
       wagmiClient.invalidateQueries({ queryKey: ['redeem_balance'] });
+      setRedeemState(
+        produce((draft) => {
+          draft.isRedeemLoading = false;
+          draft.amountIn = 0n;
+          draft.amountOut = 0n;
+          draft.split = [];
+        }),
+      );
+      updateActivity({ ...activity, status: 'success', txReceipt });
       pushNotification({
-        title: intl.formatMessage({ defaultMessage: 'Redeem complete' }),
-        severity: 'success',
-        content: <BlockExplorerLink hash={txReceipt.hash} />,
+        content: (
+          <RedeemNotification
+            {...activity}
+            status="success"
+            txReceipt={txReceipt}
+          />
+        ),
       });
-    } catch (e) {
-      console.error(`redeem vault error!\n${e.message}`);
-      if (e?.code === 'ACTION_REJECTED') {
+      trackEvent({
+        name: 'redeem_complete',
+        redeem_amount: amountIn,
+      });
+    } catch (error) {
+      setRedeemState(
+        produce((draft) => {
+          draft.isRedeemWaitingForSignature = false;
+          draft.isRedeemLoading = false;
+        }),
+      );
+      if (isUserRejected(error)) {
+        deleteActivity(activity.id);
         pushNotification({
-          title: intl.formatMessage({ defaultMessage: 'Redeem vault' }),
-          severity: 'info',
+          content: (
+            <NotificationSnack
+              icon={<SeverityIcon severity="warning" />}
+              title={intl.formatMessage({
+                defaultMessage: 'Operation Cancelled',
+              })}
+              subtitle={intl.formatMessage({
+                defaultMessage: 'User rejected operation',
+              })}
+            />
+          ),
+        });
+        trackEvent({
+          name: 'redeem_rejected',
+          redeem_amount: amountIn,
         });
       } else {
+        updateActivity({
+          ...activity,
+          status: 'error',
+          error: error?.shortMessage ?? error.message,
+        });
         pushNotification({
-          title: intl.formatMessage({ defaultMessage: 'Redeem vault' }),
-          severity: 'error',
+          content: (
+            <RedeemNotification
+              {...activity}
+              status="error"
+              error={error?.shortMessage ?? error.message}
+            />
+          ),
+        });
+        trackEvent({
+          name: 'redeem_failed',
+          redeem_amount: amountIn,
+          redeem_error: error?.shortMessage ?? error.message,
         });
       }
     }
-
-    setRedeemState(
-      produce((draft) => {
-        draft.isRedeemLoading = false;
-      }),
-    );
   }, [
     address,
     amountIn,
     amountOut,
+    deleteActivity,
+    gas,
     intl,
+    pushActivity,
     pushNotification,
     setRedeemState,
     slippage,
+    updateActivity,
     wagmiClient,
   ]);
 };

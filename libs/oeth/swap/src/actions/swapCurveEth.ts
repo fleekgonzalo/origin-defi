@@ -5,10 +5,11 @@ import {
   getPublicClient,
   prepareWriteContract,
   readContract,
-  waitForTransaction,
   writeContract,
 } from '@wagmi/core';
 import { formatUnits, isAddressEqual, maxUint256, parseUnits } from 'viem';
+
+import { GAS_BUFFER } from '../constants';
 
 import type {
   Allowance,
@@ -18,7 +19,7 @@ import type {
   EstimateGas,
   EstimateRoute,
   Swap,
-} from '../types';
+} from '@origin/shared/providers';
 
 const estimateAmount: EstimateAmount = async ({
   tokenIn,
@@ -93,10 +94,6 @@ const estimateGas: EstimateGas = async ({
       account: address ?? ETH_ADDRESS_CURVE,
     });
   } catch (e) {
-    console.error(
-      `swap curve OETHPool gas estimate error, returning fix estimate!\n${e.message}`,
-    );
-
     gasEstimate = 180000n;
   }
 
@@ -158,16 +155,14 @@ const estimateRoute: EstimateRoute = async ({
     approvalGas,
     allowanceAmount,
     rate:
-      +formatUnits(amountIn, tokenIn.decimals) /
-      +formatUnits(estimatedAmount, tokenOut.decimals),
+      +formatUnits(estimatedAmount, tokenOut.decimals) /
+      +formatUnits(amountIn, tokenIn.decimals),
   };
 };
 
-const approve: Approve = async ({ onSuccess }) => {
+const approve: Approve = async () => {
   // ETH doesn't need approval
-  if (onSuccess) {
-    await onSuccess(null);
-  }
+  return null;
 };
 
 const swap: Swap = async ({
@@ -177,12 +172,9 @@ const swap: Swap = async ({
   amountOut,
   slippage,
   curve,
-  onSuccess,
-  onError,
-  onReject,
 }) => {
   if (amountIn === 0n) {
-    return;
+    return null;
   }
 
   const minAmountOut = parseUnits(
@@ -193,42 +185,40 @@ const swap: Swap = async ({
     tokenOut.decimals,
   );
 
-  try {
-    const { request } = await prepareWriteContract({
-      address: contracts.mainnet.curveOethPool.address,
-      abi: contracts.mainnet.curveOethPool.abi,
-      functionName: 'exchange',
-      args: [
-        BigInt(
-          curve.OethPoolUnderlyings.findIndex((t) =>
-            isAddressEqual(t, tokenIn.address ?? ETH_ADDRESS_CURVE),
-          ),
-        ),
-        BigInt(
-          curve.OethPoolUnderlyings.findIndex((t) =>
-            isAddressEqual(t, tokenOut.address ?? ETH_ADDRESS_CURVE),
-          ),
-        ),
-        amountIn,
-        minAmountOut,
-      ],
-      ...(isNilOrEmpty(tokenIn.address) && { value: amountIn }),
-    });
-    const { hash } = await writeContract(request);
-    const txReceipt = await waitForTransaction({ hash });
+  const estimatedGas = await estimateGas({
+    amountIn,
+    slippage,
+    tokenIn,
+    tokenOut,
+    amountOut,
+    curve,
+  });
+  const gas = estimatedGas + (estimatedGas * GAS_BUFFER) / 100n;
 
-    console.log('swap curve OETHPool done!');
-    if (onSuccess) {
-      await onSuccess(txReceipt);
-    }
-  } catch (e) {
-    console.error(`swap curve OETHPool error!\n${e.message}`);
-    if (e?.code === 'ACTION_REJECTED' && onReject) {
-      await onReject('Swap Curve exchange');
-    } else if (onError) {
-      await onError('Swap Curve exchange');
-    }
-  }
+  const { request } = await prepareWriteContract({
+    address: contracts.mainnet.curveOethPool.address,
+    abi: contracts.mainnet.curveOethPool.abi,
+    functionName: 'exchange',
+    args: [
+      BigInt(
+        curve.OethPoolUnderlyings.findIndex((t) =>
+          isAddressEqual(t, tokenIn.address ?? ETH_ADDRESS_CURVE),
+        ),
+      ),
+      BigInt(
+        curve.OethPoolUnderlyings.findIndex((t) =>
+          isAddressEqual(t, tokenOut.address ?? ETH_ADDRESS_CURVE),
+        ),
+      ),
+      amountIn,
+      minAmountOut,
+    ],
+    gas,
+    ...(isNilOrEmpty(tokenIn.address) && { value: amountIn }),
+  });
+  const { hash } = await writeContract(request);
+
+  return hash;
 };
 
 export default {

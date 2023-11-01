@@ -10,8 +10,13 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import { AccountPopover } from '@origin/oeth/shared';
-import { OpenAccountModalButton } from '@origin/shared/providers';
+import { trackEvent } from '@origin/oeth/shared';
+import { tokens } from '@origin/shared/contracts';
+import {
+  AccountPopover,
+  ActivityButton,
+  OpenAccountModalButton,
+} from '@origin/shared/providers';
 import { useIntl } from 'react-intl';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
@@ -31,198 +36,216 @@ export function Topnav(props: BoxProps) {
     useState<HTMLButtonElement | null>(null);
 
   return (
-    <Box
-      component="nav"
-      sx={{
-        display: 'grid',
-        borderBlockEnd: {
-          xs: 'none',
-          md: '1px solid var(--mui-palette-background-paper)',
-        },
-        gap: { xs: 1, md: 10 },
-        alignItems: 'center',
-        backgroundColor: 'divider',
-        paddingInline: {
-          xs: 1.5,
-          md: 3,
-        },
-        paddingBlockStart: {
-          xs: 1.5,
-          md: 0,
-        },
-        gridTemplateColumns: {
-          xs: '1fr 1fr',
-          md: 'auto 1fr auto',
-        },
-        ...props?.sx,
-      }}
-    >
+    <>
       <Box
-        component={Link}
-        to="/"
+        sx={{
+          height: (theme) => ({
+            xs: '112px',
+            md: `${theme.mixins.toolbar.height}px`,
+          }),
+        }}
+      />
+      <Box
+        component="nav"
+        {...props}
         sx={(theme) => ({
-          '& img': {
-            maxHeight: {
-              xs: '1rem',
-              md: '1.5rem',
-            },
-            maxWidth: {
-              xs: theme.typography.pxToRem(100),
-              sm: theme.typography.pxToRem(120),
-              md: theme.typography.pxToRem(180),
-            },
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: 1,
+          zIndex: theme.zIndex.appBar,
+          backgroundColor: alpha(theme.palette.background.default, 0.6),
+          backdropFilter: 'blur(15px)',
+          height: {
+            xs: '112px',
+            md: `${theme.mixins.toolbar.height}px`,
+          },
+          display: 'grid',
+          borderBottom: {
+            xs: 'none',
+            md: `1px solid ${theme.palette.background.paper}`,
+          },
+          columnGap: { xs: 1, md: 10 },
+          rowGap: { xs: 0, md: 10 },
+          alignItems: 'center',
+          px: {
+            xs: 1.5,
+            md: 3,
+          },
+          pt: {
+            xs: 1.5,
+            md: 0,
+          },
+          gridTemplateColumns: {
+            xs: '1fr 1fr',
+            md: 'auto 1fr auto',
           },
         })}
       >
-        <img src="/images/origin-ether-logo.svg" alt="Origin logo" />
-      </Box>
-      <Tabs
-        value={location.pathname}
-        onChange={(_, value) => {
-          navigate(value);
-        }}
-        sx={{
-          order: {
-            xs: 2,
-            md: 0,
-          },
-          gridColumn: {
-            xs: 'span 2',
-            md: 'span 1',
-          },
-          marginBlockStart: {
-            xs: 4,
-            md: 0,
-          },
-          backgroundColor: 'transparent',
-          minHeight: 0,
-          overflow: 'visible',
-          '& .MuiTabs-fixed': {
-            overflow: 'visible !important',
-          },
-          fontSize: {
-            xs: '0.875rem',
-            md: '1rem',
-          },
-          '& .MuiTabs-flexContainer': {
-            justifyContent: {
-              xs: 'center',
-              md: 'flex-start',
-            },
-          },
-        }}
-      >
-        {routes[0].children.map((route) => (
-          <Tab
-            key={route?.path ?? '/'}
-            value={route?.path ?? '/'}
-            label={intl.formatMessage(route.handle.label)}
-            sx={{
-              fontSize: {
-                xs: '0.875rem',
-                md: '1rem',
+        <Box
+          component={Link}
+          to="/"
+          sx={(theme) => ({
+            '& img': {
+              maxHeight: {
+                xs: '1rem',
+                md: '1.5rem',
               },
-              position: 'relative',
-              textTransform: 'none',
-              boxSizing: 'borderBox',
-              paddingInline: 2,
-              paddingBlock: { xs: 1, md: 3 },
-              lineHeight: '1.6875rem',
-              '&:hover:after': {
-                content: '""',
-                width: '100%',
-                height: '2px',
-                background: (theme) =>
-                  `linear-gradient(90deg, ${alpha(
-                    theme.palette.primary.main,
-                    0.4,
-                  )} 0%, ${alpha(theme.palette.primary.dark, 0.4)} 100%)`,
-                position: 'absolute',
-                left: 0,
-                bottom: 0,
-                zIndex: 2,
+              maxWidth: {
+                xs: theme.typography.pxToRem(100),
+                sm: theme.typography.pxToRem(120),
+                md: theme.typography.pxToRem(180),
+              },
+            },
+          })}
+        >
+          <img src="/images/origin-ether-logo.svg" alt="Origin logo" />
+        </Box>
+        <Tabs
+          value={location.pathname}
+          onChange={(_, value) => {
+            navigate(value);
+          }}
+          sx={{
+            order: {
+              xs: 2,
+              md: 0,
+            },
+            gridColumn: {
+              xs: 'span 2',
+              md: 'span 1',
+            },
+            marginBlockStart: {
+              xs: 2,
+              md: 0,
+            },
+            '& .MuiTabs-flexContainer': {
+              justifyContent: {
+                xs: 'center',
+                md: 'flex-start',
+              },
+            },
+          }}
+        >
+          {routes[0].children.map((route) => (
+            <Tab
+              key={route?.path ?? '/'}
+              value={route?.path ?? '/'}
+              label={intl.formatMessage(route.handle.label)}
+            />
+          ))}
+        </Tabs>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            gap: { xs: 1, md: 2 },
+          }}
+        >
+          <MuiLink
+            href="https://oeth.on.fleek.co/"
+            target="_blank"
+            noWrap
+            sx={{
+              borderRadius: 25,
+              paddingX: {
+                md: 3,
+                xs: 2,
+              },
+              paddingY: {
+                md: 1,
+                xs: 0.75,
+              },
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 500,
+              minHeight: { xs: 36, md: 44 },
+              background: `linear-gradient(0deg, ${alpha(
+                theme.palette.common.white,
+                0.05,
+              )} 0%, ${alpha(theme.palette.common.white, 0.05)} 100%), ${
+                theme.palette.background.paper
+              };`,
+              '&:hover': {
+                background: (theme) => theme.palette.background.paper,
+              },
+            }}
+          >
+            {isMd
+              ? intl.formatMessage({ defaultMessage: 'IPFS' })
+              : intl.formatMessage({ defaultMessage: 'View on IPFS' })}
+          </MuiLink>
+          <OpenAccountModalButton
+            onClick={(e) => {
+              if (isConnected) {
+                setAccountModalAnchor(e.currentTarget);
+                trackEvent({
+                  name: 'open_account',
+                });
+              } else {
+                trackEvent({
+                  name: 'connect_click',
+                });
+              }
+            }}
+            sx={{
+              borderRadius: 25,
+              paddingX: {
+                md: 3,
+                xs: 2,
+              },
+              paddingY: {
+                md: 1,
+                xs: 0.75,
+              },
+              minWidth: 36,
+              maxWidth: { xs: isConnected ? 36 : 160, sm: 160, lg: 220 },
+              fontWeight: 500,
+              minHeight: { xs: 36, md: 44 },
+            }}
+          />
+          <AccountPopover
+            anchor={accountModalAnchor}
+            setAnchor={setAccountModalAnchor}
+            balanceTokens={[
+              tokens.mainnet.OETH,
+              tokens.mainnet.wOETH,
+              tokens.mainnet.WETH,
+              tokens.mainnet.rETH,
+              tokens.mainnet.frxETH,
+              tokens.mainnet.sfrxETH,
+              tokens.mainnet.stETH,
+            ]}
+          />
+          <ActivityButton
+            onClick={() => {
+              trackEvent({ name: 'open_activity' });
+            }}
+            sx={{
+              width: { xs: 36, md: 44 },
+              height: { xs: 36, md: 44 },
+              padding: {
+                xs: 0.75,
+                md: 1,
               },
             }}
           />
-        ))}
-      </Tabs>
-
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          alignItems: 'center',
-          gap: { xs: 1, md: 2 },
-          '& > a, & > *': {
-            fontSize: {
-              xs: '0.75rem',
-              md: '1rem',
-            },
-            color: (theme) => theme.palette.primary.contrastText,
-            lineHeight: (theme) => theme.spacing(3),
-          },
-        }}
-      >
-        <MuiLink
-          href="https://oeth.on.fleek.co/"
-          target="_blank"
-          noWrap
+        </Box>
+        <Divider
           sx={{
-            borderRadius: 25,
-            paddingBlock: 0.75,
-            display: 'grid',
-            placeContent: 'center',
-            paddingInline: {
-              md: 3,
-              xs: 2,
-            },
-            fontFamily: 'Inter',
-            fontStyle: 'normal',
-            fontWeight: 500,
-            minHeight: 36,
-            background: ` linear-gradient(0deg, ${alpha(
-              theme.palette.common.white,
-              0.05,
-            )} 0%, ${alpha(theme.palette.common.white, 0.05)} 100%), ${
-              theme.palette.background.paper
-            };`,
-            '&:hover': {
-              background: (theme) => theme.palette.background.paper,
-              backgroundImage: 'none',
-            },
-            color: 'primary.contrastText',
-            boxSizing: 'border-box',
-            lineHeight: '1rem',
+            display: { xs: 'block', md: 'none' },
+            gridColumn: 'span 2',
+            gridRowStart: 1,
+            borderColor: (theme) => theme.palette.background.paper,
+            position: 'relative',
+            width: 'calc(100% + 1.5rem)',
+            bottom: '-3rem',
+            left: '-0.75rem',
           }}
-        >
-          {isMd
-            ? intl.formatMessage({ defaultMessage: 'IPFS' })
-            : intl.formatMessage({ defaultMessage: 'View on IPFS' })}
-        </MuiLink>
-        <OpenAccountModalButton
-          onClick={(e) => {
-            if (isConnected) {
-              setAccountModalAnchor(e.currentTarget);
-            }
-          }}
-        />
-        <AccountPopover
-          anchor={accountModalAnchor}
-          setAnchor={setAccountModalAnchor}
         />
       </Box>
-      <Divider
-        sx={{
-          display: { xs: 'block', md: 'none' },
-          gridColumn: 'span 2',
-          gridRowStart: 1,
-          borderColor: (theme) => theme.palette.background.paper,
-          position: 'relative',
-          width: 'calc(100% + 1.5rem)',
-          bottom: '-3.75rem',
-          left: '-0.75rem',
-        }}
-      />
-    </Box>
+    </>
   );
 }

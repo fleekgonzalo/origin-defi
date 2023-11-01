@@ -1,11 +1,12 @@
 import { Divider, Skeleton, Stack, Typography } from '@mui/material';
 import { tokens } from '@origin/shared/contracts';
-import { balanceFormat } from '@origin/shared/utils';
+import { quantityFormat } from '@origin/shared/utils';
 import { useIntl } from 'react-intl';
+import { formatEther } from 'viem';
 import { useAccount, useBalance } from 'wagmi';
 
 import { usePendingYield } from '../hooks';
-import { useHistoryTableQuery } from '../queries.generated';
+import { useHistoryPageQuery } from '../queries.generated';
 
 import type { StackProps } from '@mui/material';
 
@@ -17,19 +18,19 @@ export function APYContainer() {
     token: tokens.mainnet.OETH.address,
     watch: true,
   });
-  const { data: earnings, isLoading: earningsLoading } = useHistoryTableQuery(
+  const { data, isLoading } = useHistoryPageQuery(
     { address: address?.toLowerCase(), offset: 0 },
     {
       enabled: isConnected,
+      select: (data) => data?.addresses?.at(0),
     },
   );
   const { data: pendingYield, isLoading: pendingYieldLoading } =
-    usePendingYield(tokens.mainnet.OETH);
+    usePendingYield();
 
   return (
     <Stack
       sx={{
-        paddingInline: { xs: 2, md: 2.75 },
         backgroundColor: (theme) => theme.palette.background.paper,
         borderRadius: 1,
       }}
@@ -40,26 +41,26 @@ export function APYContainer() {
         label={intl.formatMessage({ defaultMessage: 'OETH Balance' })}
         value={intl.formatNumber(
           Number(oethBalance?.formatted ?? 0),
-          balanceFormat,
+          quantityFormat,
         )}
         isLoading={isConnected && oethLoading}
       />
       <Divider orientation="vertical" flexItem />
       <ValueContainer
         label={intl.formatMessage({ defaultMessage: 'Pending Yield' })}
-        value={intl.formatNumber(pendingYield ?? 0, balanceFormat)}
+        value={intl.formatNumber(pendingYield ?? 0, quantityFormat)}
         isLoading={isConnected && pendingYieldLoading}
       />
       <Divider orientation="vertical" flexItem />
       <ValueContainer
         label={intl.formatMessage({
-          defaultMessage: 'Lifetime earnings (OETH)',
+          defaultMessage: 'Lifetime Earnings (OETH)',
         })}
         value={intl.formatNumber(
-          earnings?.addressById?.earned ?? 0,
-          balanceFormat,
+          +formatEther(BigInt(data?.earned ?? '0')),
+          quantityFormat,
         )}
-        isLoading={isConnected && earningsLoading}
+        isLoading={isConnected && isLoading}
       />
     </Stack>
   );
@@ -85,6 +86,7 @@ function ValueContainer({
         paddingBlock: 2,
         alignItems: 'center',
         textAlign: 'center',
+        justifyContent: 'space-between',
         flex: 1,
         ...rest?.sx,
       }}
@@ -92,17 +94,7 @@ function ValueContainer({
       <Typography variant="body2" color="text.secondary">
         {label}
       </Typography>
-      <Typography
-        sx={{
-          fontFamily: 'Sailec',
-          fontSize: (theme) => theme.typography.pxToRem(20),
-          fontStyle: 'normal',
-          fontWeight: 700,
-          lineHeight: '2rem',
-          textAlign: 'center',
-        }}
-        color="primary.contrastText"
-      >
+      <Typography variant="h4" textAlign="center">
         {isLoading ? <Skeleton width={60} /> : value}
       </Typography>
     </Stack>

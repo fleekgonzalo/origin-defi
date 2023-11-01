@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { contracts, tokens, whales } from '@origin/shared/contracts';
-import { usePushNotification } from '@origin/shared/providers';
+import { usePushNotification, useSlippage } from '@origin/shared/providers';
 import { isNilOrEmpty } from '@origin/shared/utils';
 import { useDebouncedEffect } from '@react-hookz/web';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,13 +23,14 @@ export const { Provider: RedeemProvider, useTracked: useRedeemState } =
       split: [],
       gas: 0n,
       rate: 0,
-      slippage: 0.01,
       isEstimateLoading: false,
+      isRedeemWaitingForSignature: false,
       isRedeemLoading: false,
     });
     const intl = useIntl();
     const queryClient = useQueryClient();
     const pushNotification = usePushNotification();
+    const { value: slippage } = useSlippage();
 
     const { data: splitAddresses } = useQuery({
       queryKey: ['assetsDecimals'],
@@ -68,6 +69,7 @@ export const { Provider: RedeemProvider, useTracked: useRedeemState } =
               draft.amountOut = 0n;
               draft.split.forEach((a) => (a.amount = 0n));
               draft.isEstimateLoading = false;
+              draft.isRedeemWaitingForSignature = false;
             }),
           );
           return;
@@ -77,7 +79,7 @@ export const { Provider: RedeemProvider, useTracked: useRedeemState } =
         try {
           splitEstimates = await queryClient.fetchQuery({
             queryKey: ['splitEstimates', state.amountIn.toString()],
-            queryFn: () =>
+            queryFn: async () =>
               readContract({
                 address: contracts.mainnet.OETHVaultCore.address,
                 abi: contracts.mainnet.OETHVaultCore.abi,
@@ -85,21 +87,22 @@ export const { Provider: RedeemProvider, useTracked: useRedeemState } =
                 args: [state.amountIn],
               }),
           });
-        } catch (e) {
-          console.error(`redeem vault estimate amount error.\n${e.message}`);
+        } catch (error) {
+          console.error(`Fail to estimate redeem operation.\n${error.message}`);
           setState(
             produce((draft) => {
               draft.amountIn = 0n;
               draft.amountOut = 0n;
               draft.split = [];
               draft.isEstimateLoading = false;
+              draft.isRedeemWaitingForSignature = false;
             }),
           );
           pushNotification({
             title: intl.formatMessage({
               defaultMessage: 'Error while estimating',
             }),
-            message: e.shortMessage,
+            message: error?.shortMessage ?? error.message,
             severity: 'error',
           });
 
@@ -123,7 +126,7 @@ export const { Provider: RedeemProvider, useTracked: useRedeemState } =
         const minAmountOut = parseUnits(
           (
             +formatUnits(total, MIX_TOKEN.decimals) -
-            +formatUnits(total, MIX_TOKEN.decimals) * state.slippage
+            +formatUnits(total, MIX_TOKEN.decimals) * slippage
           ).toString(),
           MIX_TOKEN.decimals,
         );
@@ -145,10 +148,7 @@ export const { Provider: RedeemProvider, useTracked: useRedeemState } =
                 account: whales.mainnet.OETH,
               }),
           });
-        } catch (e) {
-          console.error(
-            `redeem vault estimate gas error. Using default!\n${e.message}`,
-          );
+        } catch (error) {
           gasEstimate = 1500000n;
         }
 
@@ -158,8 +158,8 @@ export const { Provider: RedeemProvider, useTracked: useRedeemState } =
             draft.split.forEach((a, i) => (a.amount = splitEstimates[i]));
             draft.gas = gasEstimate;
             draft.rate =
-              +formatUnits(state.amountIn, tokens.mainnet.OETH.decimals) /
-              +formatUnits(total, MIX_TOKEN.decimals);
+              +formatUnits(total, MIX_TOKEN.decimals) /
+              +formatUnits(state.amountIn, tokens.mainnet.OETH.decimals);
             draft.isEstimateLoading = false;
           }),
         );

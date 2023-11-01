@@ -1,21 +1,13 @@
 import { forwardRef } from 'react';
 
-import {
-  alpha,
-  Box,
-  Button,
-  IconButton,
-  Skeleton,
-  Stack,
-  Typography,
-} from '@mui/material';
+import { alpha, Box, Button, Skeleton, Stack, Typography } from '@mui/material';
 import {
   currencyFormat,
   formatAmount,
   isNilOrEmpty,
 } from '@origin/shared/utils';
 import { useIntl } from 'react-intl';
-import { formatUnits } from 'viem';
+import { formatUnits, parseEther } from 'viem';
 
 import { BigIntInput } from './BigIntInput';
 
@@ -23,6 +15,8 @@ import type { StackProps } from '@mui/material';
 import type { Token } from '@origin/shared/contracts';
 
 import type { BigintInputProps } from './BigIntInput';
+
+const MIN_ETH_FOR_GAS = '0.015';
 
 export type TokenInputProps = {
   amount: bigint;
@@ -38,6 +32,7 @@ export type TokenInputProps = {
   disableMaxButton?: boolean;
   token: Token;
   onTokenClick?: () => void;
+  isNativeCurrency?: boolean;
   isTokenClickDisabled?: boolean;
   tokenPriceUsd?: number;
   isPriceLoading?: boolean;
@@ -45,6 +40,7 @@ export type TokenInputProps = {
     BigintInputProps,
     'value' | 'decimals' | 'onChange' | 'isLoading' | 'isError'
   >;
+  tokenButtonProps?: Omit<TokenButtonProps, 'token'>;
 } & StackProps;
 
 export const TokenInput = forwardRef<HTMLInputElement, TokenInputProps>(
@@ -63,10 +59,12 @@ export const TokenInput = forwardRef<HTMLInputElement, TokenInputProps>(
       disableMaxButton,
       token,
       onTokenClick,
+      isNativeCurrency = false,
       isTokenClickDisabled,
       tokenPriceUsd = 0,
       isPriceLoading,
       inputProps,
+      tokenButtonProps,
       ...rest
     },
     ref,
@@ -74,15 +72,28 @@ export const TokenInput = forwardRef<HTMLInputElement, TokenInputProps>(
     const intl = useIntl();
 
     const handleMaxClick = () => {
-      onAmountChange(balance);
+      const max = isNativeCurrency
+        ? balance - parseEther(MIN_ETH_FOR_GAS)
+        : balance;
+      onAmountChange(max);
     };
 
     const amountUsd = +formatUnits(amount, decimals) * tokenPriceUsd;
+    const maxVisible =
+      !hideMaxButton &&
+      (isNativeCurrency ? balance > parseEther(MIN_ETH_FOR_GAS) : true);
     const maxDisabled = disableMaxButton || !isConnected || isBalanceLoading;
 
     return (
       <Stack {...rest}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1,
+          }}
+        >
           <BigIntInput
             {...inputProps}
             value={amount}
@@ -97,7 +108,11 @@ export const TokenInput = forwardRef<HTMLInputElement, TokenInputProps>(
             token={token}
             onClick={onTokenClick}
             isDisabled={isTokenClickDisabled}
-            sx={!isConnected ? { transform: 'translateY(50%)' } : {}}
+            {...tokenButtonProps}
+            sx={{
+              ...(!isConnected && { transform: 'translateY(50%)' }),
+              ...tokenButtonProps?.sx,
+            }}
           />
         </Box>
         <Box
@@ -111,33 +126,29 @@ export const TokenInput = forwardRef<HTMLInputElement, TokenInputProps>(
           {isPriceLoading ? (
             <Skeleton width={50} />
           ) : !isNilOrEmpty(tokenPriceUsd) ? (
-            <Typography
-              color="text.secondary"
-              variant="body1"
-              sx={{
-                fontWeight: 400,
-                fontStyle: 'normal',
-                lineHeight: '1.5rem',
-              }}
-            >
+            <Typography color="text.secondary">
               {intl.formatNumber(amountUsd, currencyFormat)}
             </Typography>
           ) : null}
-          <Stack direction="row" alignItems="center" spacing={0.5}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.5}
+            overflow="hidden"
+            whiteSpace="nowrap"
+          >
             {isConnected ? (
               isBalanceLoading ? (
                 <Skeleton width={28} />
               ) : (
                 <>
                   <Typography
+                    noWrap
                     color="text.secondary"
-                    variant="body1"
                     sx={{
                       justifySelf: 'flex-end',
-                      fontWeight: 400,
-                      fontStyle: 'normal',
                       visibility: balance === undefined ? 'hidden' : 'visible',
-                      lineHeight: '1.5rem',
+                      textOverflow: 'ellipsis',
                     }}
                   >
                     {intl.formatMessage(
@@ -147,18 +158,27 @@ export const TokenInput = forwardRef<HTMLInputElement, TokenInputProps>(
                       },
                     )}
                   </Typography>
-                  {!hideMaxButton && (
+                  {maxVisible && (
                     <Button
-                      variant="text"
-                      color="inherit"
                       onClick={handleMaxClick}
                       disabled={maxDisabled}
                       sx={{
-                        minWidth: 0,
-                        padding: (theme) => theme.spacing(0.2, 1),
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        borderRadius: 1,
+                        minWidth: 36,
+                        lineHeight: 1,
+                        color: 'text.secondary',
+                        padding: (theme) => theme.spacing(0.25, 0.5),
+                        background: (theme) =>
+                          alpha(theme.palette.common.white, 0.1),
+                        ':hover': {
+                          background: (theme) => theme.palette.grey[600],
+                        },
                       }}
                     >
-                      {intl.formatMessage({ defaultMessage: 'MAX' })}
+                      {intl.formatMessage({ defaultMessage: 'max' })}
                     </Button>
                   )}
                 </>
@@ -175,24 +195,24 @@ TokenInput.displayName = 'TokenInput';
 
 type TokenButtonProps = { token: Token; isDisabled?: boolean } & StackProps;
 
-function TokenButton({ token, isDisabled, sx, ...rest }: TokenButtonProps) {
+function TokenButton({ token, isDisabled, ...rest }: TokenButtonProps) {
   return (
     <Stack
       direction="row"
-      alignItems="center"
       role="button"
       gap={1}
+      {...rest}
       sx={{
-        width: 'fit-content',
-        maxHeight: '2rem',
-        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        minHeight: 32,
+        borderRadius: 25,
         fontSize: '1rem',
-        color: 'primary.contrastText',
         fontFamily: 'Inter',
-        paddingInlineStart: 0.25,
-        paddingInlineEnd: !isDisabled ? 1 : 2,
+        paddingLeft: 0.25,
+        paddingRight: isDisabled ? 2 : 1,
         border: '1px solid transparent',
-        paddingBlock: 0.25,
+        paddingY: 0.25,
         background: (theme) => alpha(theme.palette.common.white, 0.1),
         fontStyle: 'normal',
         cursor: 'pointer',
@@ -201,14 +221,15 @@ function TokenButton({ token, isDisabled, sx, ...rest }: TokenButtonProps) {
         position: 'relative',
         ':hover': {
           background: (theme) =>
-            `linear-gradient(#3B3C3E, #3B3C3E) padding-box, linear-gradient(90deg, ${alpha(
+            `linear-gradient(${theme.palette.grey[600]}, ${
+              theme.palette.grey[600]
+            }) padding-box, linear-gradient(90deg, ${alpha(
               theme.palette.primary.main,
               0.4,
             )} 0%, ${alpha(theme.palette.primary.dark, 0.4)} 100%) border-box;`,
         },
-        ...sx,
+        ...rest?.sx,
       }}
-      {...rest}
     >
       <Box
         component="img"
@@ -216,20 +237,13 @@ function TokenButton({ token, isDisabled, sx, ...rest }: TokenButtonProps) {
         sx={{ width: '1.75rem', height: 'auto' }}
       />
       <Typography variant="inherit">{token.symbol}</Typography>
-
       {!isDisabled && (
-        <IconButton
-          sx={{
-            maxHeight: '1.375rem',
-            maxWidth: '1.375rem',
-            padding: 0,
-
-            backgroundColor: 'transparent',
-          }}
-          disableRipple
-        >
-          <Box component="img" src="/images/dropdown.svg" />
-        </IconButton>
+        <Box
+          component="img"
+          src="/images/dropdown.svg"
+          alt="dropdown"
+          sx={{ width: 24, height: 24 }}
+        />
       )}
     </Stack>
   );

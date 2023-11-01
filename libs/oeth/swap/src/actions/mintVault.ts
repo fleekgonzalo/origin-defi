@@ -8,10 +8,11 @@ import {
   prepareWriteContract,
   readContract,
   readContracts,
-  waitForTransaction,
   writeContract,
 } from '@wagmi/core';
 import { formatUnits, parseUnits } from 'viem';
+
+import { GAS_BUFFER } from '../constants';
 
 import type {
   Allowance,
@@ -20,8 +21,8 @@ import type {
   EstimateGas,
   EstimateRoute,
   Swap,
-} from '../types';
-import type { EstimateAmount } from '../types';
+} from '@origin/shared/providers';
+import type { EstimateAmount } from '@origin/shared/providers';
 
 const estimateAmount: EstimateAmount = async ({
   tokenIn,
@@ -84,37 +85,33 @@ const estimateGas: EstimateGas = async ({
     return gasEstimate;
   } catch {}
 
-  try {
-    const [rebaseThreshold, autoAllocateThreshold] =
-      await queryClient.fetchQuery({
-        queryKey: ['vault-info', tokenOut.address],
-        queryFn: () =>
-          readContracts({
-            contracts: [
-              {
-                address: contracts.mainnet.OETHVaultCore.address,
-                abi: contracts.mainnet.OETHVaultCore.abi,
-                functionName: 'rebaseThreshold',
-              },
-              {
-                address: contracts.mainnet.OETHVaultCore.address,
-                abi: contracts.mainnet.OETHVaultCore.abi,
-                functionName: 'autoAllocateThreshold',
-              },
-            ],
-          }),
-        staleTime: Infinity,
-      });
+  const [rebaseThreshold, autoAllocateThreshold] = await queryClient.fetchQuery(
+    {
+      queryKey: ['vault-info', tokenOut.address],
+      queryFn: () =>
+        readContracts({
+          contracts: [
+            {
+              address: contracts.mainnet.OETHVaultCore.address,
+              abi: contracts.mainnet.OETHVaultCore.abi,
+              functionName: 'rebaseThreshold',
+            },
+            {
+              address: contracts.mainnet.OETHVaultCore.address,
+              abi: contracts.mainnet.OETHVaultCore.abi,
+              functionName: 'autoAllocateThreshold',
+            },
+          ],
+        }),
+      staleTime: Infinity,
+    },
+  );
 
-    // TODO check validity
-    gasEstimate = 220000n;
-    if (amountIn > autoAllocateThreshold?.result) {
-      gasEstimate = 2900000n;
-    } else if (amountIn > rebaseThreshold?.result) {
-      gasEstimate = 510000n;
-    }
-  } catch (e) {
-    console.error(`mint vault gas estimate error!\n${e.message}`);
+  gasEstimate = 220000n;
+  if (amountIn > autoAllocateThreshold?.result) {
+    gasEstimate = 2900000n;
+  } else if (amountIn > rebaseThreshold?.result) {
+    gasEstimate = 510000n;
   }
 
   return gasEstimate;
@@ -158,7 +155,9 @@ const estimateApprovalGas: EstimateApprovalGas = async ({
       args: [contracts.mainnet.OETHVaultCore.address, amountIn],
       account: address,
     });
-  } catch {}
+  } catch {
+    approvalEstimate = 200000n;
+  }
 
   return approvalEstimate;
 };
@@ -201,40 +200,29 @@ const estimateRoute: EstimateRoute = async ({
     approvalGas,
     allowanceAmount,
     rate:
-      +formatUnits(amountIn, tokenIn.decimals) /
-      +formatUnits(estimatedAmount, tokenOut.decimals),
+      +formatUnits(estimatedAmount, tokenOut.decimals) /
+      +formatUnits(amountIn, tokenIn.decimals),
   };
 };
 
-const approve: Approve = async ({
-  tokenIn,
-  amountIn,
-  onSuccess,
-  onError,
-  onReject,
-}) => {
-  try {
-    const { request } = await prepareWriteContract({
-      address: tokenIn.address,
-      abi: erc20ABI,
-      functionName: 'approve',
-      args: [contracts.mainnet.OETHVaultCore.address, amountIn],
-    });
-    const { hash } = await writeContract(request);
-    const txReceipt = await waitForTransaction({ hash });
+const approve: Approve = async ({ tokenIn, tokenOut, amountIn, curve }) => {
+  const gas = await estimateApprovalGas({
+    amountIn,
+    tokenIn,
+    tokenOut,
+    curve,
+  });
 
-    console.log(`mint vault approval done!`);
-    if (onSuccess) {
-      await onSuccess(txReceipt);
-    }
-  } catch (e) {
-    console.error(`mint vault approval error!\n${e.message}`);
-    if (e?.code === 'ACTION_REJECTED' && onReject) {
-      await onReject('Mint vault approval');
-    } else if (onError) {
-      await onError('Mint vault approval');
-    }
-  }
+  const { request } = await prepareWriteContract({
+    address: tokenIn.address,
+    abi: erc20ABI,
+    functionName: 'approve',
+    args: [contracts.mainnet.OETHVaultCore.address, amountIn],
+    gas,
+  });
+  const { hash } = await writeContract(request);
+
+  return hash;
 };
 
 const swap: Swap = async ({
@@ -243,24 +231,17 @@ const swap: Swap = async ({
   amountIn,
   slippage,
   amountOut,
-  onSuccess,
-  onError,
-  onReject,
 }) => {
   const { address } = getAccount();
 
   if (amountIn === 0n || isNilOrEmpty(address)) {
-    return;
+    return null;
   }
 
   const approved = await allowance({ tokenIn, tokenOut });
 
   if (approved < amountIn) {
-    console.error(`mint vault is not approved`);
-    if (onError) {
-      await onError('Mint vault is not approved');
-    }
-    return;
+    throw new Error(`Mint vault is not approved`);
   }
 
   const minAmountOut = parseUnits(
@@ -271,28 +252,25 @@ const swap: Swap = async ({
     tokenOut.decimals,
   );
 
-  try {
-    const { request } = await prepareWriteContract({
-      address: contracts.mainnet.OETHVaultCore.address,
-      abi: contracts.mainnet.OETHVaultCore.abi,
-      functionName: 'mint',
-      args: [tokenIn.address, amountIn, minAmountOut],
-    });
-    const { hash } = await writeContract(request);
-    const txReceipt = await waitForTransaction({ hash });
+  const estimatedGas = await estimateGas({
+    amountIn,
+    slippage,
+    tokenIn,
+    tokenOut,
+    amountOut,
+  });
+  const gas = estimatedGas + (estimatedGas * GAS_BUFFER) / 100n;
 
-    console.log('mint vault done!');
-    if (onSuccess) {
-      await onSuccess(txReceipt);
-    }
-  } catch (e) {
-    console.error(`mint vault error!\n${e.message}`);
-    if (e?.code === 'ACTION_REJECTED' && onReject) {
-      await onReject('Mint vault swap');
-    } else if (onError) {
-      await onError('Mint vault swap');
-    }
-  }
+  const { request } = await prepareWriteContract({
+    address: contracts.mainnet.OETHVaultCore.address,
+    abi: contracts.mainnet.OETHVaultCore.abi,
+    functionName: 'mint',
+    args: [tokenIn.address, amountIn, minAmountOut],
+    gas,
+  });
+  const { hash } = await writeContract(request);
+
+  return hash;
 };
 
 export default {

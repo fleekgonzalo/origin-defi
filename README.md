@@ -2,22 +2,23 @@
 
 ## Setup environment
 
-Duplicate `apps/<YOUR_APP>/.env` file to `apps/<YOUR_APP>/.env.local` and fill the variables with your secrets, they will take precedence over the defaults.
+Duplicate `.env` file to `.env.local` and fill the variables with your secrets, they will take precedence over the defaults.
+
+> We use multiple `.env` files in the project, either at the root or in `/apps/<APP_NAME>` folders. They can be nested to increase specificity, more info [here](https://nx.dev/recipes/tips-n-tricks/define-environment-variables)
 
 ## Start the app
 
-To start the development server run `pnpm nx serve oeth` or `pnpm nx serve ousd`. Open your browser and navigate to http://localhost:4200/. Happy coding!
+To start the development server run `pnpm nx serve <APP_NAME>`. Open your browser and navigate to http://localhost:4200/. Happy coding!
 
 ## Apps
 
 | Status | Name | Nx project | Port | Public hosts |
 |:------:|:-----|:-----------|:-----|:-------------|
 |   🚧   | OETH | `oeth`     | 4200 | [fleek](https://defi-oeth.on.fleek.co/)    |
-|   🚧   | OUSD | `ousd`     | 4201 | [fleek]()    |
 
 ## Storybook
 
-There is a shared storybook aggregator that can run all the stories across all the libraries, run `pnpm storybook`. If you want to run storybook for one individual library (eg: ousd) simply run `pnpm nx storybook defi-ousd` (basically the command is `pnpm nx storybook name-of-the-lib`).
+There is a shared storybook aggregator that can run all the stories across all the libraries, run `pnpm storybook`. If you want to run storybook for one individual library (eg: ousd) simply run `pnpm nx storybook defi-oeth` (basically the command is `pnpm nx storybook name-of-the-lib`).
 
 ## Translations
 
@@ -54,7 +55,7 @@ We use `react-query` in conjunction with `graphql-codegen` for interacting with 
 - run the graphql-codegen task with `pnpm nx run oeth-shared:codegen-graphql`, it will generate 
   - the global types in `libs/oeth/shared/src/generated/graphql.ts` and 
   - the generated hooks next to your graphql file (i.e. `/libs/oeth/history/src/queries.generated.tsx`)
-- use the generated hooks in your component with fully typed args and results!
+- use the generated hooks in your component with fully typed args and results
 
 Couple of things to note:
 - generated hooks receives args as first param, second param exposes all react-query api for controlling execution

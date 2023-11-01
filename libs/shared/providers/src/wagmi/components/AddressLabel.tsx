@@ -1,5 +1,6 @@
 import { Skeleton } from '@mui/material';
 import { MiddleTruncated } from '@origin/shared/components';
+import { isNilOrEmpty, middleTruncate } from '@origin/shared/utils';
 import { mainnet, useEnsName } from 'wagmi';
 
 import type { MiddleTruncatedProps } from '@origin/shared/components';
@@ -9,12 +10,14 @@ type AddressLabelProps = {
   address: HexAddress;
   enableEnsName?: boolean;
   monospace?: boolean;
+  short?: boolean;
 } & Omit<MiddleTruncatedProps, 'children'>;
 
 export const AddressLabel = ({
   address,
   enableEnsName = false,
   monospace = false,
+  short = false,
   ...rest
 }: AddressLabelProps) => {
   const { data: ensName, isLoading: isEnsNameLoading } = useEnsName({
@@ -23,15 +26,16 @@ export const AddressLabel = ({
     chainId: mainnet.id,
   });
 
-  return enableEnsName ? (
-    isEnsNameLoading ? (
-      <Skeleton sx={{ minWidth: 100, ...rest?.sx }} />
-    ) : (
-      <MiddleTruncated textProps={{ ...rest }}>
-        {ensName ?? address}
-      </MiddleTruncated>
-    )
-  ) : (
-    <MiddleTruncated textProps={{ ...rest }}>{address}</MiddleTruncated>
-  );
+  const label =
+    enableEnsName && !isNilOrEmpty(ensName)
+      ? ensName
+      : short
+      ? middleTruncate(address)
+      : address;
+
+  if (enableEnsName && isEnsNameLoading) {
+    return <Skeleton sx={{ minWidth: 100, ...rest?.sx }} />;
+  }
+
+  return <MiddleTruncated textProps={{ ...rest }}>{label}</MiddleTruncated>;
 };

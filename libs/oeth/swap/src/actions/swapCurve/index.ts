@@ -5,11 +5,11 @@ import {
   getPublicClient,
   prepareWriteContract,
   readContract,
-  waitForTransaction,
   writeContract,
 } from '@wagmi/core';
 import { formatUnits, maxUint256, parseUnits } from 'viem';
 
+import { GAS_BUFFER } from '../../constants';
 import { curveRoutes } from './curveRoutes';
 
 import type {
@@ -20,7 +20,7 @@ import type {
   EstimateGas,
   EstimateRoute,
   Swap,
-} from '../../types';
+} from '@origin/shared/providers';
 
 const estimateAmount: EstimateAmount = async ({
   tokenIn,
@@ -35,7 +35,7 @@ const estimateAmount: EstimateAmount = async ({
   const curveConfig = curveRoutes[tokenIn.symbol]?.[tokenOut.symbol];
 
   if (isNilOrEmpty(curveConfig)) {
-    console.error(
+    throw new Error(
       `No curve route found, verify exchange mapping ${tokenIn.symbol} -> ${tokenOut.symbol}`,
     );
   }
@@ -78,11 +78,9 @@ const estimateGas: EstimateGas = async ({
   const curveConfig = curveRoutes[tokenIn.symbol]?.[tokenOut.symbol];
 
   if (isNilOrEmpty(curveConfig)) {
-    console.error(
+    throw new Error(
       `No curve route found, verify exchange mapping ${tokenIn.symbol} -> ${tokenOut.symbol}`,
     );
-
-    return gasEstimate;
   }
 
   try {
@@ -100,9 +98,6 @@ const estimateGas: EstimateGas = async ({
       ...(isNilOrEmpty(tokenIn.address) && { value: amountIn }),
     });
   } catch (e) {
-    console.error(
-      `swap curve exchange multiple gas estimate error, returning fix estimate! \n${e.message}`,
-    );
     gasEstimate = 350000n;
   }
 
@@ -152,7 +147,9 @@ const estimateApprovalGas: EstimateApprovalGas = async ({
       args: [curve.CurveRegistryExchange.address, amountIn],
       account: address,
     });
-  } catch {}
+  } catch {
+    approvalEstimate = 200000n;
+  }
 
   return approvalEstimate;
 };
@@ -202,41 +199,29 @@ const estimateRoute: EstimateRoute = async ({
     approvalGas,
     allowanceAmount,
     rate:
-      +formatUnits(amountIn, tokenIn.decimals) /
-      +formatUnits(estimatedAmount, tokenOut.decimals),
+      +formatUnits(estimatedAmount, tokenOut.decimals) /
+      +formatUnits(amountIn, tokenIn.decimals),
   };
 };
 
-const approve: Approve = async ({
-  tokenIn,
-  amountIn,
-  curve,
-  onSuccess,
-  onError,
-  onReject,
-}) => {
-  try {
-    const { request } = await prepareWriteContract({
-      address: tokenIn.address,
-      abi: erc20ABI,
-      functionName: 'approve',
-      args: [curve.CurveRegistryExchange.address, amountIn],
-    });
-    const { hash } = await writeContract(request);
-    const txReceipt = await waitForTransaction({ hash });
+const approve: Approve = async ({ tokenIn, tokenOut, amountIn, curve }) => {
+  const gas = await estimateApprovalGas({
+    amountIn,
+    tokenIn,
+    tokenOut,
+    curve,
+  });
 
-    console.log(`swap curve exchange multiple approval done!`);
-    if (onSuccess) {
-      await onSuccess(txReceipt);
-    }
-  } catch (e) {
-    console.error(`swap curve exchange multiple approval error!\n${e.message}`);
-    if (e?.code === 'ACTION_REJECTED' && onReject) {
-      await onReject('Swap Curve approval');
-    } else if (onError) {
-      await onError('Swap Curve approval');
-    }
-  }
+  const { request } = await prepareWriteContract({
+    address: tokenIn.address,
+    abi: erc20ABI,
+    functionName: 'approve',
+    args: [curve.CurveRegistryExchange.address, amountIn],
+    gas,
+  });
+  const { hash } = await writeContract(request);
+
+  return hash;
 };
 
 const swap: Swap = async ({
@@ -246,24 +231,17 @@ const swap: Swap = async ({
   amountOut,
   slippage,
   curve,
-  onSuccess,
-  onError,
-  onReject,
 }) => {
   const { address } = getAccount();
 
   if (amountIn === 0n || isNilOrEmpty(address)) {
-    return;
+    return null;
   }
 
   const approved = await allowance({ tokenIn, tokenOut, curve });
 
   if (approved < amountIn) {
-    console.error(`swap curve exchange multiple is not approved`);
-    if (onError) {
-      await onError('swap curve exchange multiple is not approved');
-    }
-    return;
+    throw new Error(`Swap curve is not approved`);
   }
 
   const minAmountOut = parseUnits(
@@ -277,43 +255,32 @@ const swap: Swap = async ({
   const curveConfig = curveRoutes[tokenIn.symbol]?.[tokenOut?.symbol];
 
   if (isNilOrEmpty(curveConfig)) {
-    console.error(
+    throw new Error(
       `No curve route found, verify exchange mapping ${tokenIn.symbol} -> ${tokenOut.symbol}`,
     );
-    if (onError) {
-      await onError('No curve route found');
-    }
-    return;
   }
 
-  try {
-    const { request } = await prepareWriteContract({
-      address: curve.CurveRegistryExchange.address,
-      abi: curve.CurveRegistryExchange.abi,
-      functionName: 'exchange_multiple',
-      args: [
-        curveConfig.routes,
-        curveConfig.swapParams,
-        amountIn,
-        minAmountOut,
-      ],
-      ...(isNilOrEmpty(tokenIn.address) && { value: amountIn }),
-    });
-    const { hash } = await writeContract(request);
-    const txReceipt = await waitForTransaction({ hash });
+  const estimatedGas = await estimateGas({
+    amountIn,
+    slippage,
+    tokenIn,
+    tokenOut,
+    amountOut,
+    curve,
+  });
+  const gas = estimatedGas + (estimatedGas * GAS_BUFFER) / 100n;
 
-    console.log('swap curve exchange multiple done!');
-    if (onSuccess) {
-      await onSuccess(txReceipt);
-    }
-  } catch (e) {
-    console.error(`swap curve exchange multiple error!\n${e.message}`);
-    if (e?.code === 'ACTION_REJECTED' && onReject) {
-      await onReject('Swap Curve exchange multiple');
-    } else if (onError) {
-      await onError('Swap Curve exchange multiple');
-    }
-  }
+  const { request } = await prepareWriteContract({
+    address: curve.CurveRegistryExchange.address,
+    abi: curve.CurveRegistryExchange.abi,
+    functionName: 'exchange_multiple',
+    args: [curveConfig.routes, curveConfig.swapParams, amountIn, minAmountOut],
+    gas,
+    ...(isNilOrEmpty(tokenIn.address) && { value: amountIn }),
+  });
+  const { hash } = await writeContract(request);
+
+  return hash;
 };
 
 export default {

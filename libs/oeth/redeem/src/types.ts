@@ -11,7 +11,7 @@ export type RedeemState = {
   split: RedeemEstimate[];
   gas: bigint;
   rate: number;
-  slippage: number;
   isEstimateLoading: boolean;
+  isRedeemWaitingForSignature: boolean;
   isRedeemLoading: boolean;
 };

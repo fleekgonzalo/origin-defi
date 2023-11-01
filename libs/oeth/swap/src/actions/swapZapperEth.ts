@@ -6,10 +6,11 @@ import {
   getPublicClient,
   prepareWriteContract,
   readContract,
-  waitForTransaction,
   writeContract,
 } from '@wagmi/core';
 import { formatUnits, maxUint256 } from 'viem';
+
+import { GAS_BUFFER } from '../constants';
 
 import type {
   Allowance,
@@ -19,7 +20,7 @@ import type {
   EstimateGas,
   EstimateRoute,
   Swap,
-} from '../types';
+} from '@origin/shared/providers';
 
 const estimateAmount: EstimateAmount = async ({ amountIn }) => {
   return amountIn;
@@ -97,7 +98,9 @@ const estimateApprovalGas: EstimateApprovalGas = async ({
       args: [contracts.mainnet.OETHZapper.address, amountIn],
       account: address,
     });
-  } catch {}
+  } catch {
+    approvalEstimate = 200000n;
+  }
 
   return approvalEstimate;
 };
@@ -135,97 +138,66 @@ const estimateRoute: EstimateRoute = async ({
     approvalGas,
     allowanceAmount,
     rate:
-      +formatUnits(amountIn, tokenIn.decimals) /
-      +formatUnits(estimatedAmount, tokenOut.decimals),
+      +formatUnits(estimatedAmount, tokenOut.decimals) /
+      +formatUnits(amountIn, tokenIn.decimals),
   };
 };
 
-const approve: Approve = async ({
-  tokenIn,
-  tokenOut,
-  amountIn,
-  onSuccess,
-  onError,
-  onReject,
-}) => {
-  if (
-    (isNilOrEmpty(tokenIn.address) || isNilOrEmpty(tokenOut.address)) &&
-    onSuccess
-  ) {
-    console.log(`swap eth does not require approval!`);
-    onSuccess(null);
+const approve: Approve = async ({ tokenIn, tokenOut, amountIn, curve }) => {
+  if (isNilOrEmpty(tokenIn.address) || isNilOrEmpty(tokenOut.address)) {
+    return null;
   }
 
-  try {
-    const { request } = await prepareWriteContract({
-      address: tokenIn.address,
-      abi: erc20ABI,
-      functionName: 'approve',
-      args: [contracts.mainnet.OETHZapper.address, amountIn],
-    });
-    const { hash } = await writeContract(request);
-    const txReceipt = await waitForTransaction({ hash });
+  const gas = await estimateApprovalGas({
+    amountIn,
+    tokenIn,
+    tokenOut,
+    curve,
+  });
 
-    console.log(`swap zapper eth approval done!`);
-    if (onSuccess) {
-      await onSuccess(txReceipt);
-    }
-  } catch (e) {
-    console.error(`swap zapper eth approval error!\n${e.message}`);
-    if (e?.code === 'ACTION_REJECTED' && onReject) {
-      await onReject('Swap Zapper ETH approval');
-    } else if (onError) {
-      await onError('Swap Zapper ETH approval');
-    }
-  }
+  const { request } = await prepareWriteContract({
+    address: tokenIn.address,
+    abi: erc20ABI,
+    functionName: 'approve',
+    args: [contracts.mainnet.OETHZapper.address, amountIn],
+    gas,
+  });
+  const { hash } = await writeContract(request);
+
+  return hash;
 };
 
-const swap: Swap = async ({
-  tokenIn,
-  tokenOut,
-  amountIn,
-  onSuccess,
-  onError,
-  onReject,
-}) => {
+const swap: Swap = async ({ tokenIn, tokenOut, amountIn, slippage }) => {
   const { address } = getAccount();
 
   if (amountIn === 0n || isNilOrEmpty(address)) {
-    return;
+    return null;
   }
 
   const approved = await allowance({ tokenIn, tokenOut });
 
   if (approved < amountIn) {
-    console.error(`swap zapper eth is not approved`);
-    if (onError) {
-      await onError('Swap Zapper Eth is not approved');
-    }
-    return;
+    throw new Error(`Swap zapper is not approved`);
   }
 
-  try {
-    const { request } = await prepareWriteContract({
-      address: contracts.mainnet.OETHZapper.address,
-      abi: contracts.mainnet.OETHZapper.abi,
-      functionName: 'deposit',
-      value: amountIn,
-    });
-    const { hash } = await writeContract(request);
-    const txReceipt = await waitForTransaction({ hash });
+  const estimatedGas = await estimateGas({
+    tokenIn,
+    tokenOut,
+    amountIn,
+    slippage,
+  });
+  const gas = estimatedGas + (estimatedGas * GAS_BUFFER) / 100n;
 
-    console.log('swap zapper eth done!');
-    if (onSuccess) {
-      await onSuccess(txReceipt);
-    }
-  } catch (e) {
-    console.error(`swap zapper eth error!\n${e.message}`);
-    if (e?.code === 'ACTION_REJECTED' && onReject) {
-      await onReject('Swap Zapper Eth');
-    } else if (onError) {
-      await onError('Swap Zapper Eth');
-    }
-  }
+  const { request } = await prepareWriteContract({
+    address: contracts.mainnet.OETHZapper.address,
+    abi: contracts.mainnet.OETHZapper.abi,
+    functionName: 'deposit',
+    value: amountIn,
+    gas,
+  });
+  const { hash } = await writeContract(request);
+
+  return hash;
 };
 
 export default {

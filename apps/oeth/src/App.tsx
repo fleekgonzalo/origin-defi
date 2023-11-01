@@ -1,32 +1,38 @@
-import { Container, CssBaseline, Stack } from '@mui/material';
+import { Container, Stack } from '@mui/material';
+import { trackEvent, trackPage, trackSentryError } from '@origin/oeth/shared';
+import { ErrorBoundary, ErrorPage } from '@origin/shared/components';
+import { RebaseBanner } from '@origin/shared/providers';
+import { TrackingProvider } from '@origin/shared/providers';
 import { Outlet } from 'react-router-dom';
 
 import { Topnav } from './components/Topnav';
 
 export const App = () => {
   return (
-    <>
-      <CssBaseline />
-      <Stack>
-        <Topnav />
-        <Container
-          sx={{
-            mt: {
-              xs: 3,
-              md: 5,
-              paddingInline: {
-                xs: 2,
-                md: 0,
-              },
-            },
-          }}
-          maxWidth="sm"
-        >
-          <Stack mt={3}>
+    <ErrorBoundary
+      ErrorComponent={<ErrorPage height={1} width={1} />}
+      onError={trackSentryError}
+    >
+      <TrackingProvider
+        onPageChange={trackPage}
+        onWalletConnect={(connect_address, connect_wallet) => {
+          trackEvent({ name: 'connect', connect_address, connect_wallet });
+        }}
+      >
+        <Stack minWidth={370}>
+          <Topnav />
+          <RebaseBanner />
+          <Container
+            sx={{
+              mt: 3,
+              mb: 10,
+            }}
+            maxWidth="sm"
+          >
             <Outlet />
-          </Stack>
-        </Container>
-      </Stack>
-    </>
+          </Container>
+        </Stack>
+      </TrackingProvider>
+    </ErrorBoundary>
   );
 };
