@@ -20,7 +20,7 @@ export const MyStake = () => {
   return (
     <div className="bg-gray-900 rounded-lg p-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4 sm:gap-0">
       <div className="flex flex-col items-start gap-1 sm:gap-3">
-        <div className="text-gray-500 text-sm">My stake</div>
+        <div className="text-gray-500 text-sm">My Stake</div>
         <div className="flex items-center gap-3">
           <img src={OGVIcon} alt="OGV" />
           {!isConnected ? (
@@ -33,7 +33,7 @@ export const MyStake = () => {
         </div>
       </div>
       <div className="flex flex-col items-start gap-1 sm:gap-3">
-        <div className="text-gray-500 text-sm">Wallet balance</div>
+        <div className="text-gray-500 text-sm">Wallet Balance</div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <img src={OGVIcon} alt="OGV" />
           {isConnected ? (

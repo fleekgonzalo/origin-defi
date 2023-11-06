@@ -54,7 +54,7 @@ export const CollectRewards = () => {
 
   return (
     <div className="bg-gray-900 rounded-lg text-sm p-6">
-      <div className="text-gray-500">Rewards Available to collect</div>
+      <div className="text-gray-500">Rewards Available to Collect</div>
       <div className="flex justify-between items-center text-2xl mt-2 font-medium">
         <div>
           <NumberSpinner num={state.rewardsToCollect} />
@@ -78,7 +78,7 @@ export const CollectRewards = () => {
           ? 'Confirm'
           : mode === 'pending'
           ? 'Pending'
-          : 'Collect rewards'}
+          : 'Collect Rewards'}
       </button>
     </div>
   );

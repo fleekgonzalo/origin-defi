@@ -20,7 +20,7 @@ export const Stats = () => (
     </div>
     <div className="hidden sm:block w-px bg-gray-900" />
     <div className="flex flex-col items-start gap-3">
-      <div className="text-gray-500">Total OGV staked</div>
+      <div className="text-gray-500">Total OGV Staked</div>
       <div className="font-bold text-3xl flex items-baseline gap-3">
         80.06%
         <div className="text-xs font-normal">(3.418b)</div>
@@ -28,7 +28,7 @@ export const Stats = () => (
     </div>
     <div className="hidden sm:block w-px bg-gray-900" />
     <div className="flex flex-col items-start gap-3 pr-8">
-      <div className="text-gray-500">Voting addresses</div>
+      <div className="text-gray-500">Voting Addresses</div>
       <div className="font-bold text-3xl">
         <NumberSpinner num={1462} slow />
       </div>

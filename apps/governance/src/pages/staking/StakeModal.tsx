@@ -20,6 +20,8 @@ import {
 import { toSignificantDigits } from '../../utils/number';
 import { estimateAPY, votingPowerMultiplier } from '../../utils/stakeMath';
 
+import type { StyleHTMLAttributes } from 'react';
+
 export const StakeModal = () => {
   const { state, setState } = useContext(StateContext);
   const [amount, setAmount] = useState('');
@@ -110,7 +112,7 @@ export const StakeModal = () => {
               className="bg-[rgba(250,251,251,0.10)] rounded px-1 leading-1"
               onClick={() => setAmount(String(state.walletBalance))}
             >
-              <span className="transform translate-y-[-2px]">max</span>
+              <span className="transform translate-y-[-2px]">Max</span>
             </button>
           </div>
         </div>
@@ -142,11 +144,11 @@ export const StakeModal = () => {
 
         {!Number(amount) ? (
           <button className="btn w-full py-4 text-base leading-none opacity-50">
-            Enter an amount
+            Enter an Amount
           </button>
         ) : Number(amount) > state.walletBalance ? (
           <button className="btn w-full py-4 text-base leading-none opacity-50">
-            Insufficient balance
+            Insufficient Balance
           </button>
         ) : (
           <button
@@ -182,7 +184,7 @@ export const ExtendStakeModal = () => {
     setState({
       toast: {
         title: 'Stake extended',
-        text: `${lockup?.tokens.toLocaleString(undefined)} OGV`,
+        text: `${lockup?.tokens?.toLocaleString(undefined)} OGV`,
         icon: 'OGV',
       },
       lockups: state.lockups.map((l) => {
@@ -195,6 +197,8 @@ export const ExtendStakeModal = () => {
     });
     setShouldClose(true);
   }
+
+  if (!lockup) return null;
 
   return (
     <AnimatedModal
@@ -240,7 +244,7 @@ export const ExtendStakeModal = () => {
           </div>
           <div className="px-4 py-2 flex items-center gap-2 text-2xl font-medium">
             <img src={OGVIcon} alt="veOGV" />
-            {lockup.tokens.toLocaleString()}
+            {lockup?.tokens?.toLocaleString()}
           </div>
           <div className="px-6 flex items-center">
             {estimateTimeToFutureTimestamp(lockup.endsAt)}
@@ -251,7 +255,6 @@ export const ExtendStakeModal = () => {
               maximumFractionDigits: 0,
             })}
           </div>
-          {/* <MyLockupsTable lockups={lockup ? [lockup] : []} disableActions /> */}
         </div>
 
         <StakeDurationWithMin
@@ -268,7 +271,7 @@ export const ExtendStakeModal = () => {
 
         {!state.rewardsToCollect ? null : (
           <div className="bg-[rgba(81,84,102,0.20)] rounded px-6 py-4 leading-snug mb-6 flex flex-col gap-2">
-            <div className="font-medium">OGV Rewards will be collected</div>
+            <div className="font-medium">OGV Rewards will be Collected</div>
             <div className="text-xs text-gray-500">
               {`You have accrued ${state.rewardsToCollect.toFixed(
                 2,
@@ -391,16 +394,18 @@ const StakeDurationWithMin = (props: StakeDurationWithMinProps) => {
             </div>
             <input
               type="range"
-              className="range"
+              className="range flex-1"
               min={min}
               max="48"
               step="1"
               value={monthsToStake}
-              style={{
-                '--thumb-percentage': `${
-                  ((monthsToStake - min) / (48 - min)) * 100
-                }%`,
-              }}
+              style={
+                {
+                  '--thumb-percentage': `${
+                    ((monthsToStake - min) / (48 - min)) * 100
+                  }%`,
+                } as StyleHTMLAttributes<HTMLInputElement>
+              }
               onChange={(e) => {
                 setMonthsToStake(Number(e.target.value));
               }}
@@ -445,7 +450,7 @@ const AmountReceived = (props: AmountReceivedProps) => {
       <div className="font-bold mb-3 flex items-center gap-1">
         Voting Power Received Now
         <Tooltip
-          title="The amount of veOGV you will receive today in return for your staked OGV."
+          title="The amount of veOGV you will receive today in return for extending your stake. The more veOGV you have, the more staking rewards you will earn."
           placement="right"
         />
       </div>
@@ -459,12 +464,12 @@ const AmountReceived = (props: AmountReceivedProps) => {
           <div className="text-gray-500 ml-1 text-sm mt-2">veOGV</div>
         </div>
         <div className="mt-2 mb-2 text-xs flex items-center">
-          Voting power:
+          Voting Power:
           <span className="mx-2 font-bold">
             {`${toSignificantDigits(votingPowerPct, 4)}% `}
           </span>
           <Tooltip
-            title="Your share of the total amount of veOGV issued to date."
+            title="The percentage of total Origin DeFi DAO voting power represented by this lockup."
             placement="right"
           />
         </div>
@@ -496,7 +501,7 @@ const RewardsAPY = (props: RewardsAPYProps) => {
           <div className="mr-2">Next Emissions Reduction Event: </div>
           <div className="font-bold mr-1">28 Sept 2024</div>
           <Tooltip
-            title="The APY currently being earned at the chosen staking duration/quantity of OGV. It is variable and will change over time."
+            title="Staking rewards were initially generated by a front-loaded inflation schedule but are gradually transitioning to being generated by OETH and OUSD performance fees."
             placement="right"
           />
         </div>

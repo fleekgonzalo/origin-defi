@@ -14,7 +14,7 @@ export const Actions = () => {
         to="https://www.ousd.com/ogv-dashboard"
         target="_blank"
       >
-        OGV dashboard
+        OGV Dashboard
         <ExternalLink />
       </Link>
       <button

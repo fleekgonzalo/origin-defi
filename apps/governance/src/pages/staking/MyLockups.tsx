@@ -23,7 +23,7 @@ interface MyLockupsProps {
 export const MyLockups = (props: MyLockupsProps) => {
   return (
     <div className="bg-gray-900 rounded-lg text-sm">
-      <div className="p-6 border-b border-off-black">My lockups</div>
+      <div className="p-6 border-b border-off-black">My Lockups</div>
       <MyLockupsTable {...props} />
       {props.lockups.length ? null : (
         <div className="p-6 text-center text-gray-500">No lockups to show</div>
@@ -107,9 +107,14 @@ const LockupRow = (props: {
           </button>
           <UnstakeButton lockup={lockup} />
 
-          <button className="text-blue-500">
+          <a
+            href="https://etherscan.io"
+            className="text-blue-500"
+            target="_blank"
+            rel="noreferrer"
+          >
             <ExternalLink size={18} />
-          </button>
+          </a>
         </div>
       )}
     </>
