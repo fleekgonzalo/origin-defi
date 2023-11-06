@@ -24,3 +24,33 @@ body {
 .btn-outline-disabled {
   @apply rounded-full leading-tight font-medium border-blue-600/50 border text-off-white/30;
 }
+
+input[type='range'].range {
+  @apply appearance-none w-full h-2 bg-gray-300 rounded-full outline-none;
+  transition: opacity 0.2s;
+}
+
+input[type='range'].range::-webkit-slider-thumb {
+  @apply appearance-none rounded-full bg-blue-gradient cursor-pointer;
+  margin-top: 3px;
+  width: 1px;
+  height: 1px;
+  transform: scale(18);
+}
+
+input[type='range'].range::-moz-range-thumb {
+  @apply appearance-none h-4 w-4 bg-blue-600 rounded-full cursor-pointer;
+}
+
+input[type='range'].range::-webkit-slider-runnable-track {
+  @apply appearance-none w-full h-2 rounded-r-full;
+  background: linear-gradient(
+    90deg,
+    #0274f1 var(--thumb-percentage, 0%),
+    gray 0
+  );
+}
+
+input[type='range'].range::-moz-range-track {
+  @apply appearance-none w-full h-2 bg-gray-300 rounded-full;
+}

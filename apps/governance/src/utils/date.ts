@@ -22,9 +22,13 @@ export function getDateAfterMonths(monthsToAdd: number): string {
   const today = new Date();
   today.setMonth(today.getMonth() + monthsToAdd);
 
-  const day = String(today.getDate()).padStart(2, '0');
-  const month = today.toLocaleString('default', { month: 'short' });
-  const year = today.getFullYear();
+  return formatDate(today);
+}
+
+export function formatDate(date: Date): string {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = date.toLocaleString('default', { month: 'short' });
+  const year = date.getFullYear();
 
   return `${day} ${month} ${year}`;
 }
@@ -36,17 +40,17 @@ export function formatDurationInMonths(months: number): string {
   let duration = '';
 
   if (years > 0) {
-    duration += `${years} year${years !== 1 ? 's' : ''}`;
+    duration += `${years} Year${years !== 1 ? 's' : ''}`;
   }
 
   if (remainingMonths > 0) {
     if (duration) {
       duration += ', ';
     }
-    duration += `${remainingMonths} month${remainingMonths !== 1 ? 's' : ''}`;
+    duration += `${remainingMonths} Month${remainingMonths !== 1 ? 's' : ''}`;
   }
 
-  return duration || '0 months';
+  return duration || '0 Months';
 }
 
 export function formatDateFromTimestamp(timestamp: number): string {

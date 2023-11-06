@@ -6,9 +6,12 @@ import OGVIcon from '../../assets/ogv.svg';
 import veOGVIcon from '../../assets/ve-ogv.svg';
 import { AnimatedModal, ModalHeader } from '../../components/AnimatedModal';
 import { StateContext } from '../../components/AppState';
+import { ArrowDropUp } from '../../components/Icons';
 import { StyledSlider } from '../../components/StyledSlider';
 import { Tooltip } from '../../components/Tooltip';
 import {
+  estimateTimeToFutureTimestamp,
+  formatDate,
   formatDurationInMonths,
   getDateAfterMonths,
   getTimestampAfterMonths,
@@ -16,7 +19,6 @@ import {
 } from '../../utils/date';
 import { toSignificantDigits } from '../../utils/number';
 import { estimateAPY, votingPowerMultiplier } from '../../utils/stakeMath';
-import { MyLockupsTable } from './MyLockups';
 
 export const StakeModal = () => {
   const { state, setState } = useContext(StateContext);
@@ -92,7 +94,13 @@ export const StakeModal = () => {
         }`}
       >
         <div className="flex items-center justify-between">
-          <div className="font-medium">Amount to stake</div>
+          <div className="font-medium flex items-center gap-1">
+            Amount to Stake
+            <Tooltip
+              title="The amount of veOGV you will receive today in return for your staked OGV."
+              placement="right"
+            />
+          </div>
           <div className="text-gray-500 flex items-center gap-2">
             {`Balance: ${state.walletBalance.toLocaleString(undefined, {
               maximumFractionDigits: 2,
@@ -106,7 +114,7 @@ export const StakeModal = () => {
             </button>
           </div>
         </div>
-        <div className="bg-[#141519] border border-[#B5BECA] rounded flex items-stretch mt-4 text-2xl font-medium mb-6">
+        <div className="bg-black border border-[#B5BECA] rounded flex items-stretch mt-4 text-2xl font-bold mb-6">
           <input
             className="bg-transparent border-none py-4 pl-6 leading-none flex-1"
             placeholder="0.00"
@@ -125,12 +133,12 @@ export const StakeModal = () => {
 
         <StakeDuration {...{ monthsToStake, setMonthsToStake }} />
 
+        <RewardsAPY monthsToStake={monthsToStake} />
+
         <AmountReceived
           {...{ monthsToStake, setMonthsToStake }}
           amount={amount ? Number(amount) : 0}
         />
-
-        <RewardsAPY monthsToStake={monthsToStake} />
 
         {!Number(amount) ? (
           <button className="btn w-full py-4 text-base leading-none opacity-50">
@@ -220,14 +228,38 @@ export const ExtendStakeModal = () => {
           sign ? 'blur-sm pointer-events-none' : ''
         }`}
       >
-        <div className="bg-[rgba(81,84,102,0.20)] rounded leading-snug mb-6">
-          <MyLockupsTable lockups={lockup ? [lockup] : []} disableActions />
+        <div className="bg-[rgba(81,84,102,0.20)] rounded leading-snug mb-6 grid grid-cols-[auto,max-content,max-content] border border-[rgba(81,84,102,0.50)]">
+          <div className="text-gray-500 px-4 py-2 text-xs border-b border-[rgba(81,84,102,0.50)]">
+            OGV
+          </div>
+          <div className="text-gray-500 px-4 py-2 text-xs border-b border-[rgba(81,84,102,0.50)]">
+            Time Remaining
+          </div>
+          <div className="text-gray-500 px-4 py-2 text-xs border-b border-[rgba(81,84,102,0.50)]">
+            Voting Power
+          </div>
+          <div className="px-4 py-2 flex items-center gap-2 text-2xl font-medium">
+            <img src={OGVIcon} alt="veOGV" />
+            {lockup.tokens.toLocaleString()}
+          </div>
+          <div className="px-6 flex items-center">
+            {estimateTimeToFutureTimestamp(lockup.endsAt)}
+          </div>
+          <div className="flex gap-2 justify-center items-center px-6">
+            <img src={veOGVIcon} alt="veOGV" className="h-6" />
+            {lockup.votingPower.toLocaleString(undefined, {
+              maximumFractionDigits: 0,
+            })}
+          </div>
+          {/* <MyLockupsTable lockups={lockup ? [lockup] : []} disableActions /> */}
         </div>
 
-        <StakeDuration
-          {...{ monthsToStake, setMonthsToStake }}
+        <StakeDurationWithMin
+          {...{ monthsToStake, setMonthsToStake, endsAt: lockup?.endsAt || 0 }}
           min={monthsToTimestamp(lockup?.endsAt || Date.now())}
         />
+
+        <RewardsAPY monthsToStake={monthsToStake} />
 
         <AmountReceived
           monthsToStake={monthsToStake}
@@ -265,27 +297,30 @@ export const ExtendStakeModal = () => {
 interface StakeDurationProps {
   monthsToStake: number;
   setMonthsToStake: (months: number) => void;
-  min?: number;
 }
 
 const StakeDuration = (props: StakeDurationProps) => {
-  const { monthsToStake, setMonthsToStake, min } = props;
+  const { monthsToStake, setMonthsToStake } = props;
   return (
     <>
       <div className="font-bold mb-3 flex items-center gap-1">
-        Stake Duration
+        Lockup Duration
         <Tooltip
           title="The length of time you will lock up your OGV to earn yield and voting power. There is no way to unstake before your withdrawal date."
           placement="right"
         />
       </div>
       <div className="bg-[rgba(81,84,102,0.20)] border border-[rgba(81,84,102,0.50)] rounded px-6 pt-4 pb-2 leading-snug mb-6">
-        <div className="text-2xl font-medium">
-          {formatDurationInMonths(monthsToStake)}
-        </div>
-        <div className="mt-2 mb-2 text-xs">
-          <span className="mr-2">Withdrawal date:</span>
-          <span className="font-bold">{getDateAfterMonths(monthsToStake)}</span>
+        <div className="flex items-center justify-between">
+          <div className="text-2xl font-medium">
+            {formatDurationInMonths(monthsToStake)}
+          </div>
+          <div className="flex text-xs gap-1">
+            <span>Lockup Ends:</span>
+            <span className="font-bold">
+              {getDateAfterMonths(monthsToStake)}
+            </span>
+          </div>
         </div>
         <div className="px-2">
           <StyledSlider
@@ -295,10 +330,100 @@ const StakeDuration = (props: StakeDurationProps) => {
             marks={marks}
             value={monthsToStake}
             onChange={(e, val: number) => {
-              if (min && val < min) return;
               setMonthsToStake(val);
             }}
           />
+        </div>
+      </div>
+    </>
+  );
+};
+
+interface StakeDurationWithMinProps {
+  monthsToStake: number;
+  setMonthsToStake: (months: number) => void;
+  min: number;
+  endsAt: number;
+}
+
+const StakeDurationWithMin = (props: StakeDurationWithMinProps) => {
+  const { monthsToStake, setMonthsToStake, min, endsAt } = props;
+  return (
+    <>
+      <div className="font-bold mb-3 flex items-center gap-1">
+        Lockup Duration
+        <Tooltip
+          title="The length of time you will lock up your OGV to earn yield and voting power. There is no way to unstake before your withdrawal date."
+          placement="right"
+        />
+      </div>
+      <div className="bg-[rgba(81,84,102,0.20)] border border-[rgba(81,84,102,0.50)] rounded px-6 pt-4 pb-2 leading-snug mb-6">
+        <div className="flex items-center justify-between">
+          <div className="text-2xl font-medium">
+            {formatDurationInMonths(monthsToStake)}
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex text-xs gap-1">
+              <span>Current Lockup Ends:</span>
+              <span className="font-bold">{formatDate(new Date(endsAt))}</span>
+            </div>
+            <div className="flex text-xs gap-1">
+              <span>Extended Lockup Ends:</span>
+              <span className="font-bold">
+                {getDateAfterMonths(monthsToStake)}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="px-2 h-16 w-full py-4 inline-block relative touch-none">
+          <div className="flex">
+            <div
+              className="h-2 rounded-l-full bg-gray-600 relative"
+              style={{ width: `${(min / 48) * 100}%` }}
+            >
+              <div
+                className="absolute right-0 transform translate-x-[50%] top-1 text-gray-500 flex flex-col items-center uppercase font-medium"
+                style={{ fontSize: 6 }}
+              >
+                <ArrowDropUp size={16} />
+                <div style={{ marginTop: '-6px' }}>Current Lockup Ends</div>
+              </div>
+            </div>
+            <input
+              type="range"
+              className="range"
+              min={min}
+              max="48"
+              step="1"
+              value={monthsToStake}
+              style={{
+                '--thumb-percentage': `${
+                  ((monthsToStake - min) / (48 - min)) * 100
+                }%`,
+              }}
+              onChange={(e) => {
+                setMonthsToStake(Number(e.target.value));
+              }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-gray-500 mt-4">
+            <div className="text-center">0</div>
+            <div className="text-center">1y</div>
+            <div className="text-center">2y</div>
+            <div className="text-center">3y</div>
+            <div className="text-center">4y</div>
+          </div>
+          {/* <StyledSlider
+            max={48}
+            min={0}
+            step={1}
+            marks={marks}
+            value={monthsToStake}
+            onChange={(e, val: number) => {
+              if (min && val < min) return;
+              setMonthsToStake(val);
+            }}
+          /> */}
         </div>
       </div>
     </>
@@ -318,33 +443,30 @@ const AmountReceived = (props: AmountReceivedProps) => {
   return (
     <>
       <div className="font-bold mb-3 flex items-center gap-1">
-        Amount received today
+        Voting Power Received Now
         <Tooltip
           title="The amount of veOGV you will receive today in return for your staked OGV."
           placement="right"
         />
       </div>
-      <div className="bg-[rgba(81,84,102,0.20)] border border-[rgba(81,84,102,0.50)] rounded leading-snug mb-6 flex justify-stretch">
-        <div className="px-6 pt-3 pb-2 flex-1">
-          <div className="text-2xl font-medium">
-            {myVotingPower.toLocaleString(undefined, {
-              maximumFractionDigits: 2,
-              minimumFractionDigits: 0,
-            })}
-          </div>
-          <div className="mt-2 mb-2 text-xs flex items-center">
-            Voting power:
-            <span className="mx-2 font-bold">
-              {`${toSignificantDigits(votingPowerPct, 4)}% `}
-            </span>
-            <Tooltip
-              title="Your share of the total amount of veOGV issued to date."
-              placement="right"
-            />
-          </div>
+      <div className="bg-[rgba(81,84,102,0.20)] border border-[rgba(81,84,102,0.50)] rounded leading-snug mb-6 flex justify-between px-6 py-4">
+        <div className="text-2xl font-medium flex items-center">
+          <img src={veOGVIcon} alt="veOGV" className="mr-1" />
+          {myVotingPower.toLocaleString(undefined, {
+            maximumFractionDigits: 2,
+            minimumFractionDigits: 0,
+          })}
+          <div className="text-gray-500 ml-1 text-sm mt-2">veOGV</div>
         </div>
-        <div className="border-l border-[rgba(81,84,102,0.50)] flex items-center justify-center px-6 text-gray-500 font-medium gap-2 text-xl">
-          <img src={veOGVIcon} alt="veOGV" /> veOGV
+        <div className="mt-2 mb-2 text-xs flex items-center">
+          Voting power:
+          <span className="mx-2 font-bold">
+            {`${toSignificantDigits(votingPowerPct, 4)}% `}
+          </span>
+          <Tooltip
+            title="Your share of the total amount of veOGV issued to date."
+            placement="right"
+          />
         </div>
       </div>
     </>
@@ -360,15 +482,23 @@ const RewardsAPY = (props: RewardsAPYProps) => {
   return (
     <>
       <div className="font-bold mb-3 flex items-center gap-1">
-        Rewards vAPY
+        Staking vAPY
         <Tooltip
           title="The APY currently being earned at the chosen staking duration/quantity of OGV. It is variable and will change over time."
           placement="right"
         />
       </div>
-      <div className="bg-[rgba(81,84,102,0.20)] border border-[rgba(81,84,102,0.50)] rounded leading-snug mb-6 px-6 pt-3 pb-2 flex justify-start">
+      <div className="bg-[rgba(81,84,102,0.20)] border border-[rgba(81,84,102,0.50)] rounded leading-snug mb-6 px-6 pt-3 pb-2 flex items-center justify-between">
         <div className="bg-orange-gradient bg-clip-text text-transparent font-bold text-2xl">
-          {`${estimateAPY(monthsToStake).toFixed(2)}%`}
+          {`~${estimateAPY(monthsToStake).toFixed(2)}%`}
+        </div>
+        <div className="flex text-xs items-center">
+          <div className="mr-2">Next Emissions Reduction Event: </div>
+          <div className="font-bold mr-1">28 Sept 2024</div>
+          <Tooltip
+            title="The APY currently being earned at the chosen staking duration/quantity of OGV. It is variable and will change over time."
+            placement="right"
+          />
         </div>
       </div>
     </>

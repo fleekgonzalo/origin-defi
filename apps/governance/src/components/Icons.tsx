@@ -70,6 +70,23 @@ export const CaretDown = ({
   </svg>
 );
 
+export const ArrowDropUp = ({
+  size = 24,
+  className,
+}: {
+  size?: number;
+  className?: string;
+}) => (
+  <svg
+    height={size}
+    width={size}
+    viewBox="0 -960 960 960"
+    className={`fill-current${className ? ` ${className}` : ''}`}
+  >
+    <path d="m280-400 200-200 200 200H280Z" />
+  </svg>
+);
+
 export const ProfileIcon = ({ size = 28 }: { size?: number }) => (
   <svg height={size} width={size}>
     <rect

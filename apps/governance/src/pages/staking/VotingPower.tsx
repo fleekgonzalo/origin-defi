@@ -13,7 +13,7 @@ export const VotingPower = () => {
   const votingPowerPct = (myVotingPower / state.totalVotes) * 100;
   return (
     <div className="bg-gray-900 rounded-lg text-sm p-6">
-      <div className="text-gray-500">My voting power</div>
+      <div className="text-gray-500">My Voting Power</div>
       <div className="flex justify-between items-center text-2xl mt-2 font-medium">
         <div>
           {myVotingPower.toLocaleString(undefined, {
@@ -26,11 +26,27 @@ export const VotingPower = () => {
         </div>
       </div>
       {myVotingPower === 0 ? null : (
-        <div className="text-2xl mt-2 font-medium">
-          {`${toSignificantDigits(votingPowerPct, 4)}% `}
+        <div className="mb-6">
+          {'('}
+          <span className="font-medium">
+            {`${toSignificantDigits(votingPowerPct, 4)}% `}
+          </span>
           <span className="text-gray-500">of total votes</span>
+          {')'}
         </div>
       )}
+      <div className="flex flex-col gap-4">
+        <button className="btn-outline py-4">Vote</button>
+        <button className="btn-outline py-4">Create Snapshot Proposal</button>
+        <div className="flex flex-col gap-1">
+          <button className="btn-outline-disabled py-4">
+            Create On-chain Proposal
+          </button>
+          <div className="text-gray-500 text-center">
+            Requires <span className="text-white">1,000,000 veOGV</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

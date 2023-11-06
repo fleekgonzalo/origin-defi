@@ -11,6 +11,7 @@ import {
   estimateTimeToFutureTimestamp,
   formatDateFromTimestamp,
 } from '../../utils/date';
+import { toSignificantDigits } from '../../utils/number';
 
 import type { Lockup } from '../../components/AppState';
 
@@ -32,7 +33,7 @@ export const MyLockups = (props: MyLockupsProps) => {
 };
 
 const gridCols = `grid grid-cols-[auto,auto] sm:grid-cols-[auto,auto,auto]`;
-const gridColsActions = `grid grid-cols-[auto,auto,max-content] sm:grid-cols-[auto,auto,auto,max-content] border-b border-off-black`;
+const gridColsActions = `grid grid-cols-[auto,auto,auto,max-content] sm:grid-cols-[auto,auto,auto,auto,max-content] border-b border-off-black`;
 
 export const MyLockupsTable = (props: MyLockupsProps) => {
   return (
@@ -40,9 +41,10 @@ export const MyLockupsTable = (props: MyLockupsProps) => {
       <div className="text-gray-500 pl-6 py-4">OGV</div>
       {/* <div className="text-gray-500 py-4 text-center">Time remaining</div> */}
       <div className="text-gray-500 py-4 text-center hidden sm:block">
-        Lockup ends
+        Lockup Ends
       </div>
-      <div className="text-gray-500 px-6 py-4 text-center">Voting power</div>
+      <div className="text-gray-500 py-4 text-center">Voting Power</div>
+      <div className="text-gray-500 py-4 text-center">veOGV</div>
       {props.disableActions ? null : <div />}
       {props.lockups.map((lockup, idx) => (
         <LockupRow
@@ -61,9 +63,10 @@ const LockupRow = (props: {
   idx: number;
   disableActions?: boolean;
 }) => {
-  const { setState } = useContext(StateContext);
+  const { state, setState } = useContext(StateContext);
   const { lockup } = props;
   const rowClass = `items-center border-t border-off-black py-4 transition duration-150 ease-in-out`;
+  const votingPowerPct = (lockup.votingPower / state.totalVotes) * 100;
 
   return (
     <>
@@ -82,17 +85,19 @@ const LockupRow = (props: {
           {formatDateFromTimestamp(lockup.endsAt)}
         </Tooltip>
       </div>
-      <div className={`${rowClass} flex gap-2 justify-center px-6`}>
+      <div className={`${rowClass} flex justify-center `}>
+        {`${toSignificantDigits(votingPowerPct, 4)}% `}
+      </div>
+      <div className={`${rowClass} flex gap-2 justify-center pr-3`}>
         <img src={veOGVIcon} alt="veOGV" />
         {lockup.votingPower.toLocaleString(undefined, {
           maximumFractionDigits: 0,
         })}
       </div>
-
       {props.disableActions ? null : (
-        <div className={`${rowClass} flex gap-2 justify-center pr-6`}>
+        <div className={`${rowClass} flex gap-2 justify-center pr-3`}>
           <button
-            className="btn-outline text-xs px-4 py-1.5"
+            className="btn-outline text-xs px-3 py-1.5"
             onClick={(e) => {
               e.stopPropagation();
               setState({ extendStakeModal: lockup.id });
@@ -167,7 +172,7 @@ const UnstakeButton = ({ lockup }: { lockup: Lockup }) => {
 
   return (
     <button
-      className={`${btnClass} text-xs px-4 py-1.5 flex items-center gap-2`}
+      className={`${btnClass} text-xs px-3 py-1.5 flex items-center gap-2`}
       onClick={(e) => {
         e.stopPropagation();
         unstake();
