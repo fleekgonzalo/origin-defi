@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 
 import { NotificationSnack, SeverityIcon } from '@origin/shared/components';
-import { isNilOrEmpty, isUserRejected } from '@origin/shared/utils';
+import { isNilOrEmpty, isUserRejected, scale } from '@origin/shared/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { waitForTransaction } from '@wagmi/core';
 import { produce } from 'immer';
@@ -157,12 +157,35 @@ export const useHandleTokenFlip = () => {
   ] = useSwapState();
   const { value: slippage } = useSlippage();
   const queryClient = useQueryClient();
-  const { CurveRegistryExchange, OethPoolUnderlyings } = useCurve();
+  const { data: curve } = useCurve();
 
   return useCallback(async () => {
     trackEvent({ name: 'change_input_output' });
+
+    const scaledAmountIn = scale(amountIn, tokenIn.decimals, tokenOut.decimals);
+    const scaledAmountOut = scale(
+      amountOut,
+      tokenOut.decimals,
+      tokenIn.decimals,
+    );
     const newRoutes = getAvailableRoutes(swapRoutes, tokenOut, tokenIn);
-    if (isNilOrEmpty(newRoutes)) {
+    const availabilities = await Promise.allSettled(
+      newRoutes.map((r) =>
+        swapActions[r.action].isRouteAvailable({
+          amountIn: amountIn,
+          tokenIn: r.tokenIn,
+          tokenOut: r.tokenOut,
+          curve,
+        }),
+      ),
+    );
+    const filteredRoutes = newRoutes.filter(
+      (_, i) =>
+        availabilities[i].status === 'fulfilled' &&
+        (availabilities[i] as PromiseFulfilledResult<boolean>).value,
+    );
+
+    if (isNilOrEmpty(filteredRoutes)) {
       const newTokenOut = getAvailableTokensForSource(
         swapRoutes,
         'tokenIn',
@@ -177,6 +200,7 @@ export const useHandleTokenFlip = () => {
           state.tokenIn = oldTokenOut;
           state.estimatedSwapRoutes = [];
           state.selectedSwapRoute = null;
+          state.isSwapRoutesLoading = false;
         }),
       );
     } else {
@@ -185,16 +209,19 @@ export const useHandleTokenFlip = () => {
           const oldTokenOut = tokenOut;
           draft.tokenOut = tokenIn;
           draft.tokenIn = oldTokenOut;
+          draft.amountIn = scaledAmountIn;
+          draft.amountOut = scaledAmountOut;
         }),
       );
-
       if (amountIn > 0n || amountOut > 0n) {
         setSwapState(
           produce((draft) => {
             draft.isSwapRoutesLoading = true;
+            draft.estimatedSwapRoutes = [];
+            draft.selectedSwapRoute = null;
           }),
         );
-        const routes = await Promise.all(
+        const routes = await Promise.allSettled(
           newRoutes.map((route) =>
             queryClient.fetchQuery({
               queryKey: [
@@ -203,7 +230,8 @@ export const useHandleTokenFlip = () => {
                 tokenIn.symbol,
                 route.action,
                 slippage,
-                amountIn.toString(),
+                scaledAmountIn.toString(),
+                scaledAmountOut.toString(),
               ] as const,
               queryFn: async () => {
                 let res: EstimatedSwapRoute;
@@ -211,14 +239,11 @@ export const useHandleTokenFlip = () => {
                   res = await swapActions[route.action].estimateRoute({
                     tokenIn: route.tokenIn,
                     tokenOut: route.tokenOut,
-                    amountIn: amountOut,
-                    amountOut: amountIn,
+                    amountIn: scaledAmountIn,
+                    amountOut: scaledAmountOut,
                     route,
                     slippage,
-                    curve: {
-                      CurveRegistryExchange,
-                      OethPoolUnderlyings,
-                    },
+                    curve,
                   });
                 } catch (error) {
                   console.error(
@@ -242,32 +267,36 @@ export const useHandleTokenFlip = () => {
           ),
         );
 
-        const sortedRoutes = routes.sort((a, b) => {
-          const valA =
-            a.estimatedAmount -
-            (a.gas + (a.allowanceAmount < amountOut ? a.approvalGas : 0n));
-          const valB =
-            b.estimatedAmount -
-            (b.gas + (b.allowanceAmount < amountOut ? b.approvalGas : 0n));
+        const sortedRoutes = routes
+          .map((r) => (r.status === 'fulfilled' ? r.value : null))
+          .sort((a, b) => {
+            const valA =
+              scale(a.estimatedAmount, a.tokenOut.decimals, 18) -
+              (a.gas + (a.allowanceAmount < amountIn ? a.approvalGas : 0n));
+            const valB =
+              scale(b.estimatedAmount, b.tokenOut.decimals, 18) -
+              (b.gas + (b.allowanceAmount < amountIn ? b.approvalGas : 0n));
 
-          return valA < valB ? 1 : valA > valB ? -1 : 0;
-        });
-
+            return valA < valB ? 1 : valA > valB ? -1 : 0;
+          });
         setSwapState(
           produce((draft) => {
             draft.estimatedSwapRoutes = sortedRoutes;
             draft.selectedSwapRoute = sortedRoutes[0];
             draft.amountOut = sortedRoutes[0].estimatedAmount ?? 0n;
-            draft.isSwapRoutesLoading = false;
           }),
         );
       }
+      setSwapState(
+        produce((draft) => {
+          draft.isSwapRoutesLoading = false;
+        }),
+      );
     }
   }, [
-    CurveRegistryExchange,
-    OethPoolUnderlyings,
     amountIn,
     amountOut,
+    curve,
     queryClient,
     setSwapState,
     slippage,
@@ -301,7 +330,7 @@ export const useHandleSelectSwapRoute = () => {
 
 export const useSwapRouteAllowance = (route: SwapRoute) => {
   const [{ swapActions }] = useSwapState();
-  const curve = useCurve();
+  const { data: curve } = useCurve();
 
   return useQuery({
     queryKey: [
@@ -330,7 +359,7 @@ export const useSwapRouteAllowance = (route: SwapRoute) => {
 export const useHandleApprove = () => {
   const intl = useIntl();
   const { address } = useAccount();
-  const curve = useCurve();
+  const { data: curve } = useCurve();
   const queryClient = useQueryClient();
   const wagmiClient = useWagmiClient();
   const pushNotification = usePushNotification();
@@ -486,7 +515,7 @@ export const useHandleSwap = () => {
   const intl = useIntl();
   const { value: slippage } = useSlippage();
   const { address } = useAccount();
-  const curve = useCurve();
+  const { data: curve } = useCurve();
   const queryClient = useQueryClient();
   const wagmiClient = useWagmiClient();
   const pushNotification = usePushNotification();

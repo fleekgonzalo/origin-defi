@@ -1,5 +1,5 @@
 import { contracts, tokens } from '@origin/shared/contracts';
-import { isNilOrEmpty } from '@origin/shared/utils';
+import { isNilOrEmpty, subtractSlippage } from '@origin/shared/utils';
 import {
   erc20ABI,
   getAccount,
@@ -37,8 +37,8 @@ const estimateAmount: EstimateAmount = async ({ tokenOut, amountIn }) => {
         args: [amountIn],
       },
       {
-        address: contracts.mainnet.OETHVaultCore.address,
-        abi: contracts.mainnet.OETHVaultCore.abi,
+        address: contracts.mainnet.OETHVault.address,
+        abi: contracts.mainnet.OETHVault.abi,
         functionName: 'priceUnitMint',
         args: [tokens.mainnet.frxETH.address],
       },
@@ -156,19 +156,11 @@ const approve: Approve = async ({ tokenIn, tokenOut, amountIn, curve }) => {
     return null;
   }
 
-  const gas = await estimateApprovalGas({
-    amountIn,
-    tokenIn,
-    tokenOut,
-    curve,
-  });
-
   const { request } = await prepareWriteContract({
     address: tokenIn.address,
     abi: erc20ABI,
     functionName: 'approve',
     args: [contracts.mainnet.OETHZapper.address, amountIn],
-    gas,
   });
   const { hash } = await writeContract(request);
 
@@ -194,13 +186,7 @@ const swap: Swap = async ({
     throw new Error(`Swap zapper sfrxETH is not approved`);
   }
 
-  const minAmountOut = parseUnits(
-    (
-      +formatUnits(amountOut, tokenOut.decimals) -
-      +formatUnits(amountOut, tokenOut.decimals) * slippage
-    ).toString(),
-    tokenOut.decimals,
-  );
+  const minAmountOut = subtractSlippage(amountOut, tokenOut.decimals, slippage);
 
   const estimatedGas = await estimateGas({
     amountIn,

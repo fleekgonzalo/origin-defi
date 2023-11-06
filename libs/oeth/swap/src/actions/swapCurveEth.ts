@@ -1,5 +1,9 @@
 import { contracts } from '@origin/shared/contracts';
-import { ETH_ADDRESS_CURVE, isNilOrEmpty } from '@origin/shared/utils';
+import {
+  ETH_ADDRESS_CURVE,
+  isNilOrEmpty,
+  subtractSlippage,
+} from '@origin/shared/utils';
 import {
   getAccount,
   getPublicClient,
@@ -7,7 +11,7 @@ import {
   readContract,
   writeContract,
 } from '@wagmi/core';
-import { formatUnits, isAddressEqual, maxUint256, parseUnits } from 'viem';
+import { formatUnits, isAddressEqual, maxUint256 } from 'viem';
 
 import { GAS_BUFFER } from '../constants';
 
@@ -36,7 +40,7 @@ const estimateAmount: EstimateAmount = async ({
     abi: curve.CurveRegistryExchange.abi,
     functionName: 'get_exchange_amount',
     args: [
-      contracts.mainnet.curveOethPool.address,
+      contracts.mainnet.OETHCurvePool.address,
       tokenIn.address ?? ETH_ADDRESS_CURVE,
       tokenOut.address ?? ETH_ADDRESS_CURVE,
       amountIn,
@@ -63,18 +67,12 @@ const estimateGas: EstimateGas = async ({
   const publicClient = getPublicClient();
   const { address } = getAccount();
 
-  const minAmountOut = parseUnits(
-    (
-      +formatUnits(amountOut, tokenOut.decimals) -
-      +formatUnits(amountOut, tokenOut.decimals) * slippage
-    ).toString(),
-    tokenOut.decimals,
-  );
+  const minAmountOut = subtractSlippage(amountOut, tokenOut.decimals, slippage);
 
   try {
     gasEstimate = await publicClient.estimateContractGas({
-      address: contracts.mainnet.curveOethPool.address,
-      abi: contracts.mainnet.curveOethPool.abi,
+      address: contracts.mainnet.OETHCurvePool.address,
+      abi: contracts.mainnet.OETHCurvePool.abi,
       functionName: 'exchange',
       args: [
         BigInt(
@@ -177,13 +175,7 @@ const swap: Swap = async ({
     return null;
   }
 
-  const minAmountOut = parseUnits(
-    (
-      +formatUnits(amountOut, tokenOut.decimals) -
-      +formatUnits(amountOut, tokenOut.decimals) * slippage
-    ).toString(),
-    tokenOut.decimals,
-  );
+  const minAmountOut = subtractSlippage(amountOut, tokenOut.decimals, slippage);
 
   const estimatedGas = await estimateGas({
     amountIn,
@@ -196,8 +188,8 @@ const swap: Swap = async ({
   const gas = estimatedGas + (estimatedGas * GAS_BUFFER) / 100n;
 
   const { request } = await prepareWriteContract({
-    address: contracts.mainnet.curveOethPool.address,
-    abi: contracts.mainnet.curveOethPool.abi,
+    address: contracts.mainnet.OETHCurvePool.address,
+    abi: contracts.mainnet.OETHCurvePool.abi,
     functionName: 'exchange',
     args: [
       BigInt(
